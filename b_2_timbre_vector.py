@@ -85,6 +85,8 @@ def batch_compute_features(sound_files, use_recon:bool=True, model=None):
                 'recon_audio': (y_recon := model.decode(model.encode(y)[0]) if use_recon else None),
                 'sr': (sr_ := li.get_samplerate(os.path.join('sounds', sound_file)) if hasattr(li, 'get_samplerate') else li.load(os.path.join('sounds', sound_file), sr=None)[1]),
                 'encoding': (enc := model.encode(y)[0]),
+                'encoding_mean': enc.mean(axis=-1),
+                'encoding_std': enc.std(axis=-1),
                 'features_raw': {
                     'spectral_centroid': (centroid := li.feature.spectral_centroid(y=y, sr=sr_).mean()),
                     'spectral_flatness': (flatness := li.feature.spectral_flatness(y=y).mean()),
@@ -220,6 +222,35 @@ def plot_latent(dim, encodings, labels):
     plt.tight_layout()
     plt.show()
 
+def plot_timbre_vs_encoding(sound_data_sorted, quality_dropdown):
+        """
+        Plots the selected timbre quality against encoding mean and std for each sound in the corpus.
+        """
+        encoding_means = [item['encoding_mean'][-1][0] for item in sound_data_sorted]
+        encoding_stds = [item['encoding_std'][-1][0] for item in sound_data_sorted]
+        timbre_qualities = [item['features_recon'][quality_dropdown.value] for item in sound_data_sorted]
+        filenames = [item['filename'] for item in sound_data_sorted]
+
+        plt.figure(figsize=(14, 6))
+        plt.subplot(1, 2, 1)
+        plt.scatter(encoding_means, timbre_qualities, c='b')
+        for i, label in enumerate(filenames):
+            plt.annotate(label, (encoding_means[i], timbre_qualities[i]), fontsize=8, alpha=0.7)
+        plt.xlabel('Encoding Mean (last dimension)')
+        plt.ylabel(quality_dropdown.label)
+        plt.title(f"{quality_dropdown.label} vs Encoding Mean")
+
+        plt.subplot(1, 2, 2)
+        plt.scatter(encoding_stds, timbre_qualities, c='g')
+        for i, label in enumerate(filenames):
+            plt.annotate(label, (encoding_stds[i], timbre_qualities[i]), fontsize=8, alpha=0.7)
+        plt.xlabel('Encoding Std (last dimension)')
+        plt.ylabel(quality_dropdown.label)
+        plt.title(f"{quality_dropdown.label} vs Encoding Std (Variance)")
+
+        plt.tight_layout()
+        plt.show()
+
 # Plot spectrograms for left, right, and interpolated audio
 def plot_spectrograms(encodings, left_index, right_index, interpolated_audio, labels):
         fig, axs = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
@@ -334,6 +365,8 @@ lerp_slider = make_slider(max_val=len(sound_data)-1)
 
 display(Audio(samples_to_modify[0]['recon_audio'], rate=samples_to_modify[0]['sr']) )
 
+
+
 # Function to update sorting and interpolation
 def update_interpolation(corpus, sample, timbre_quality, x):
     # Sort audio and encodings by selected timbre quality
@@ -358,18 +391,22 @@ def update_interpolation(corpus, sample, timbre_quality, x):
         'raw_audio': interp_audio,
         'sr': sr,
         'encoding': interp_latent,
+        'encoding_mean': interp_latent.mean(axis=-1),
+        'encoding_std': interp_latent.std(axis=-1),
         'features_recon': interp_features,
         'features_raw': interp_features
     }
     corpus_with_interp = sorted_corpus + [interp_entry]
 
     # NEW CODE HERE
+    print('interp shape', interp_entry['encoding_mean'].shape)
 
     # Prepare splits for plotting: 'features_recon' for corpus, 'features_recon' for interpolated
     splits = ['features_recon']
     labels = [item['filename'] for item in corpus_with_interp]
     
     display(Audio(interp_audio, rate=sr)  )
+    print()
     plot_latent(0, [left_latent, interp_latent, right_latent], [sorted_corpus[left_index]['filename'], 'Interpolation', sorted_corpus[right_index]['filename']])
     plot_sound_features(
         corpus_with_interp,
@@ -379,6 +416,11 @@ def update_interpolation(corpus, sample, timbre_quality, x):
         labels=labels,
         special_filename='Interpolation'
     )
+
+
+   
+    
+    plot_timbre_vs_encoding(sorted_corpus, quality_dropdown)
     
     # plot_spectrograms(resampled_encodings, left_index, right_index, interp_audio, [audio['filename'] for audio in sorted_corpus])
     print(f"Interpolating between {sorted_corpus[left_index]['filename']} and {sorted_corpus[right_index]['filename']} (alpha={alpha:.2f}), sorted by {timbre_quality.replace('_',' ')}")
