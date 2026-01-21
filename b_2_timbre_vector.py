@@ -1,10 +1,8 @@
 # %% [markdown]
-# 
-
-# %% [markdown]
 #  This notebook finds the most similar latent point to an input sound, then applies the difference derived in interpolation to that sound.
 
 # %%
+# Import necessary libraries
 from load_generative_model import Model
 from IPython.display import Audio, display
 # from gui import interface
@@ -28,10 +26,7 @@ from ipywidgets import Dropdown, interact, FloatSlider, IntSlider, fixed, VBox
 
 
 # %%
-# Working with trajectories in latent audio models
-
-
-# %%
+# Model and data setup
 model_name: str = 'percussion'
 model_location:str = 'generative_models/'+model_name+'.ts'
 control_model_location = 'control_models/vae_scripted_model.ts'
@@ -43,7 +38,7 @@ sound_files = [f for f in os.listdir('sounds') if f.endswith(('.wav', '.aif', '.
 
 
 # %%
-# # Loading and analysing samples – First, we load our sample library. Then we compute the audio features and encodings for the sounds.
+# Loading and analysing samples – First, we load our sample library. Then we compute the audio features and encodings for the sounds.
 def audio_features(audio_y, sr=44100):
             '''Compute timbre features for each audio file and its encoding'''
                 
@@ -222,12 +217,12 @@ def plot_latent(dim, encodings, labels):
     plt.tight_layout()
     plt.show()
 
-def plot_timbre_vs_encoding(sound_data_sorted, quality_dropdown):
+def plot_timbre_vs_encoding(sound_data_sorted, quality_dropdown, dimension=0):
         """
         Plots the selected timbre quality against encoding mean and std for each sound in the corpus.
         """
-        encoding_means = [item['encoding_mean'][-1][0] for item in sound_data_sorted]
-        encoding_stds = [item['encoding_std'][-1][0] for item in sound_data_sorted]
+        encoding_means = [item['encoding_mean'][-1][dimension] for item in sound_data_sorted]
+        encoding_stds = [item['encoding_std'][-1][dimension] for item in sound_data_sorted]
         timbre_qualities = [item['features_recon'][quality_dropdown.value] for item in sound_data_sorted]
         filenames = [item['filename'] for item in sound_data_sorted]
 
@@ -236,7 +231,7 @@ def plot_timbre_vs_encoding(sound_data_sorted, quality_dropdown):
         plt.scatter(encoding_means, timbre_qualities, c='b')
         for i, label in enumerate(filenames):
             plt.annotate(label, (encoding_means[i], timbre_qualities[i]), fontsize=8, alpha=0.7)
-        plt.xlabel('Encoding Mean (last dimension)')
+        plt.xlabel(f'Encoding Mean (dimension {dimension})')
         plt.ylabel(quality_dropdown.label)
         plt.title(f"{quality_dropdown.label} vs Encoding Mean")
 
@@ -244,7 +239,7 @@ def plot_timbre_vs_encoding(sound_data_sorted, quality_dropdown):
         plt.scatter(encoding_stds, timbre_qualities, c='g')
         for i, label in enumerate(filenames):
             plt.annotate(label, (encoding_stds[i], timbre_qualities[i]), fontsize=8, alpha=0.7)
-        plt.xlabel('Encoding Std (last dimension)')
+        plt.xlabel(f'Encoding Std (dimension {dimension})')
         plt.ylabel(quality_dropdown.label)
         plt.title(f"{quality_dropdown.label} vs Encoding Std (Variance)")
 
@@ -330,7 +325,8 @@ def slider_to_audio(position:float, audio_sample:dict, sorted_corpus:list[dict],
     left_index = int(np.floor(position))
     right_index = min(left_index + 1, len(sorted_corpus) - 1)
     alpha = position - left_index
-    interp_latent = apply_attribute_vector(sorted_corpus[left_index]['encoding'], sorted_corpus[right_index]['encoding'], audio_sample['encoding'], alpha)
+    # interp_latent = apply_attribute_vector(sorted_corpus[left_index]['encoding'], sorted_corpus[right_index]['encoding'], audio_sample['encoding'], alpha)
+    interp_latent = interpolate_latents(sorted_corpus[left_index]['encoding'], sorted_corpus[right_index]['encoding'], alpha)
     recon_audio = latent_model.decode(interp_latent)
     return recon_audio, interp_latent
 
@@ -338,7 +334,7 @@ def make_slider(max_val, min_val=0,  step=0.01, default=0, description='Interpol
     return FloatSlider(min=min_val, max=max_val, step=step, value=default, description=description)
 
 
-# %%
+
 # Construct a unified data structure for each sound using a list comprehension,
 sound_data = batch_compute_features(sound_files, use_recon=True, model=model)
 sound_data_sorted = sorted(sound_data, key=lambda x: x['features_recon']['spectral_centroid'])
@@ -353,13 +349,17 @@ samples_to_modify = batch_compute_features([audio_sample], use_recon=True, model
 
 
 # %%
-
+# Set up interactive widgets for timbre interpolation
 # Dropdown for timbre quality
 quality_options = [
     ("Spectral Centroid", "spectral_centroid"),
     ("Spectral Flatness", "spectral_flatness"),
     ("Zero Crossing Rate", "zero_crossing_rate"),
 ]
+
+latent_dimension_options = [i for i in range(sound_data[0]['encoding'].shape[1])]
+
+dimension_dropdown = Dropdown(options=latent_dimension_options, value=0, description="Latent Dimension:")
 quality_dropdown = Dropdown(options=quality_options, value="spectral_centroid", description="Timbre Quality:")
 lerp_slider = make_slider(max_val=len(sound_data)-1)
 
@@ -368,7 +368,7 @@ display(Audio(samples_to_modify[0]['recon_audio'], rate=samples_to_modify[0]['sr
 
 
 # Function to update sorting and interpolation
-def update_interpolation(corpus, sample, timbre_quality, x):
+def update_interpolation(corpus, sample, timbre_quality, x, dimension):
     # Sort audio and encodings by selected timbre quality
     sorted_corpus = sorted(corpus, key=lambda x: x['features_recon'][timbre_quality])
     left_index = int(np.floor(x))
@@ -407,7 +407,7 @@ def update_interpolation(corpus, sample, timbre_quality, x):
     
     display(Audio(interp_audio, rate=sr)  )
     print()
-    plot_latent(0, [left_latent, interp_latent, right_latent], [sorted_corpus[left_index]['filename'], 'Interpolation', sorted_corpus[right_index]['filename']])
+    plot_latent(dimension, [left_latent, interp_latent, right_latent], [sorted_corpus[left_index]['filename'], 'Interpolation', sorted_corpus[right_index]['filename']])
     plot_sound_features(
         corpus_with_interp,
         x_feature='filename',
@@ -420,7 +420,7 @@ def update_interpolation(corpus, sample, timbre_quality, x):
 
    
     
-    plot_timbre_vs_encoding(sorted_corpus, quality_dropdown)
+    plot_timbre_vs_encoding(sorted_corpus, quality_dropdown, dimension)
     
     # plot_spectrograms(resampled_encodings, left_index, right_index, interp_audio, [audio['filename'] for audio in sorted_corpus])
     print(f"Interpolating between {sorted_corpus[left_index]['filename']} and {sorted_corpus[right_index]['filename']} (alpha={alpha:.2f}), sorted by {timbre_quality.replace('_',' ')}")
@@ -429,47 +429,7 @@ def update_interpolation(corpus, sample, timbre_quality, x):
 
 # Use interact to link dropdown and sliders
 
-interact(update_interpolation, sample= fixed(samples_to_modify[0]), corpus=fixed(sound_data), timbre_quality=quality_dropdown, x=lerp_slider)
-
-
-# %%
-# visualisation
-
-def get_audios(alpha:float):
-    left_audio, right_audio, interpolated_audio = None, None, None
-
-
-def plot_audio_feature_space(x_axis, y_axis, sorted_audio, interpolated_audio, sr=44100):
-        x_vals = [audio[x_axis] for audio in sorted_audio]
-        y_vals = [audio[y_axis] for audio in sorted_audio]
-        labels = [audio['filename'] for audio in sorted_audio]
-
-        # Compute features for interpolated audio
-        interp_audio = interpolated_audio
-        interp_centroid = li.feature.spectral_centroid(y=interp_audio, sr=sr).mean()
-        interp_flatness = li.feature.spectral_flatness(y=interp_audio).mean()
-        interp_zero_cross = li.feature.zero_crossing_rate(y=interp_audio).mean()
-        interp_features = {
-            "spectral_centroid": interp_centroid,
-            "spectral_flatness": interp_flatness,
-            "zero_crossing_rate": interp_zero_cross,
-        }
-
-        plt.figure(figsize=(8, 6))
-        plt.scatter(x_vals, y_vals, c='blue', label='Corpus Sounds')
-        for i, label in enumerate(labels):
-            plt.annotate(label, (x_vals[i], y_vals[i]), fontsize=8, alpha=0.7)
-        plt.scatter(
-            interp_features[x_axis], interp_features[y_axis],
-            c='red', marker='*', s=200, label='Interpolated'
-        )
-        plt.xlabel(x_axis)
-        plt.ylabel(y_axis)
-        plt.title("Corpus and Interpolated Sound in Feature Space")
-        plt.legend()
-        plt.tight_layout()
-        plt.show()
-
+interact(update_interpolation, sample= fixed(samples_to_modify[0]), corpus=fixed(sound_data), timbre_quality=quality_dropdown, x=lerp_slider, dimension=dimension_dropdown)
 
 
 
