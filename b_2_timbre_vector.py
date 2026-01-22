@@ -31,7 +31,10 @@ model_name: str = 'percussion'
 model_location:str = 'generative_models/'+model_name+'.ts'
 control_model_location = 'control_models/vae_scripted_model.ts'
 audio_sample = 'UMRU_chord_loop_atmosphere_140_Abmin.wav'
-model = Model([model_location])
+
+# Options:  'RAVE', 'STABLE_AUDIO'
+# model = Model(model_type='RAVE', model_path=[model_location])
+model = Model(model_type='STABLE_AUDIO', model_path=[model_location, control_model_location])
 sr: int =44100
 # Get all sound files from the 'sounds' folder
 sound_files = [f for f in os.listdir('sounds') if f.endswith(('.wav', '.aif', '.mp3', '.ogg'))]
@@ -363,7 +366,7 @@ dimension_dropdown = Dropdown(options=latent_dimension_options, value=0, descrip
 quality_dropdown = Dropdown(options=quality_options, value="spectral_centroid", description="Timbre Quality:")
 lerp_slider = make_slider(max_val=len(sound_data)-1)
 
-display(Audio(samples_to_modify[0]['recon_audio'], rate=samples_to_modify[0]['sr']) )
+# display(Audio(samples_to_modify[0]['recon_audio'], rate=samples_to_modify[0]['sr']) )
 
 
 
