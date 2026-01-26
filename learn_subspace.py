@@ -30,6 +30,9 @@ import numpy as np
 import os
 import torch
 from itertools import product
+from ipywidgets import VBox
+from ipywidgets import FloatSlider, interact
+from ipywidgets import VBox, FloatSlider, interact
 
 
 
@@ -372,6 +375,8 @@ sound_data = batch_compute_features(sound_files, use_recon=True, model=model)
 
 
 
+
+
 # sound_data_sorted = sorted(sound_data, key=lambda x: x['features_recon']['spectral_centroid'])
 
 # %%
@@ -577,7 +582,7 @@ loss_fn = nn.MSELoss(reduction='sum')
 
 def vae_loss(recon_x, x, mu, logvar, x_attr, vae):
     alpha = 1.0  # Reconstruction loss weight
-    beta = 0.01  # KL divergence weight
+    beta = 0.1  # KL divergence weight
     theta = 10.0  # Attribute loss weight
 
 
@@ -615,8 +620,6 @@ for epoch in range(epochs):
         metadata_data = np.concatenate([m for m in metadata_vectors], axis=0)  # shape: (total_time, num_features)
         metadata_data = torch.tensor(metadata_data, dtype=torch.float32)
         x_attr = metadata_data[idx]
-        # print(x_attr.shape, batch.shape)
-        # break
         optimizer.zero_grad()
         recon, mu, logvar = vae(batch)
         loss, (recon_loss, kl, attr_loss) = vae_loss(recon, batch, mu, logvar, x_attr, vae)
@@ -633,20 +636,25 @@ for epoch in range(epochs):
     if (epoch+1) % 10 == 0:
         print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss:.2f}")
 
-# Plot VAE training losses
+# Plot VAE training losses, all scaled to [0, 1] for comparison
 plt.figure(figsize=(10, 6))
-# plt.plot(total_loss_history, label='Total Loss')
-# plt.plot(recon_loss_history, label='Recon Loss')
-# plt.plot(kl_loss_history, label='KL Loss')
-plt.plot(attr_loss_history, label='Attr Loss')
+loss_lists = [total_loss_history, recon_loss_history, kl_loss_history, attr_loss_history]
+labels = ['Total Loss', 'Recon Loss', 'KL Loss', 'Attr Loss']
+for losses, label in zip(loss_lists, labels):
+    arr = np.array(losses)
+    arr_min, arr_max = arr.min(), arr.max()
+    if arr_max > arr_min:
+        arr_scaled = (arr - arr_min) / (arr_max - arr_min)
+    else:
+        arr_scaled = arr  # avoid division by zero if constant
+    plt.plot(arr_scaled, label=label)
 plt.xlabel('Epoch')
-plt.ylabel('Loss')
-plt.title('VAE Training Losses')
+plt.ylabel('Scaled Loss')
+plt.title('VAE Training Losses (Scaled)')
 plt.legend()
 plt.grid(True, linestyle='--', alpha=0.5)
 plt.tight_layout()
 plt.show()
-
 
 # Select a sample sound file
 sample_idx = 0
@@ -764,6 +772,7 @@ def plot_feature_alignment(model, sound_files, file_index=1, feature_names=None,
 plot_feature_alignment(model, sound_files, file_index=1, feature_names=None, plot_encoding_axes=True, vae=vae)
 
 
+
 # %%
 #
 
@@ -830,11 +839,155 @@ def update_interpolation(timbre_quality, x, dimension):
 
 # Use interact to link dropdown and sliders
 
-interact(update_interpolation, corpus=fixed(sound_data), timbre_quality=quality_dropdown, x=lerp_slider, dimension=dimension_dropdown)
+# interact(update_interpolation, corpus=fixed(sound_data), timbre_quality=quality_dropdown, x=lerp_slider, dimension=dimension_dropdown)
 
 
 
 
 
 
+# %%
+# Timbre shifting with VAE sliders
+
+
+def timbre_shift_example(encoding_flat_tensor, timbre_model, features_dict=None):
+    # Pass through VAE to get latent representation
+    with torch.no_grad():
+        mu, logvar = timbre_model.encode(encoding_flat_tensor)
+        z = timbre_model.reparameterize(mu, logvar)  # (time, vae_latent_dim)
+
+    # Compute average per VAE channel for slider defaults
+    z_avg = z.mean(dim=0).numpy()  # shape: (vae_latent_dim)
+
+    # 4. Prepare sliders labeled by features_dict keys
+    feature_labels = list(features_dict.keys()) if features_dict is not None else []
+    sliders = [
+        FloatSlider(
+            value=z_avg[i],
+            min=z_avg[i] - 2.0,
+            max=z_avg[i] + 2.0,
+            step=0.01,
+            description=feature_labels[i] if i < len(feature_labels) else f"Attr {i}"
+        )
+        for i in range(len(z_avg))
+    ]
+
+    def update_from_sliders(*slider_vals):
+        # Shift the VAE encoding by slider deltas and decode
+        print(f"Slider values changed: {slider_vals}")  # Print every time sliders are changed
+        z_shifted = z.clone()
+        for i, val in enumerate(slider_vals):
+            delta = val - z_avg[i]
+            z_shifted[:, i] += delta
+        with torch.no_grad():
+            vae_decoded = timbre_model.decode(z_shifted)
+        vae_decoded_np = vae_decoded.numpy().T[np.newaxis, :, :]
+        recon_audio = model.decode(vae_decoded_np)
+        display(Audio(recon_audio, rate=sr_))
+
+    # Show the sliders in a vertical box
+    slider_box = VBox(sliders)
+    display(slider_box)
+    interact(update_from_sliders, **{f"attr_{i}": sliders[i] for i in range(len(sliders))})
+
+# 1. Load and encode the example sound
+y, sr_ = li.load(os.path.join('sounds', audio_sample), sr=None)
+encoding = torch.tensor(model.encode(y)[0].squeeze(0).T)   # shape: (time, dim)
+
+timbre_shift_example(encoding, vae, features_dict={key: key for key in metadata_keys})
+# %%
+# Create multiple labeled sliders
+sliders = [
+    FloatSlider(
+        min=0,
+        max=10,
+        step=0.1,
+        value=5,
+        description=f'Value {i}:',
+        orientation='vertical',
+        readout=True,
+        readout_format='.1f'
+    )
+    for i in range(3)
+]
+
+# Track previous values to detect changes
+prev_vals = [slider.value for slider in sliders]
+
+def on_slider_change(*vals):
+    changed = [i for i, (old, new) in enumerate(zip(prev_vals, vals)) if old != new]
+    if changed:
+        print(f"Changed slider(s): {changed}, New values: {vals}")
+    else:
+        print(f"No change. Current values: {vals}")
+    # Update previous values
+    for i, val in enumerate(vals):
+        prev_vals[i] = val
+
+from IPython.display import display
+from ipywidgets import interact, VBox, FloatSlider
+from ipywidgets import FloatSlider, jslink
+import numpy as np
+
+slider_box = VBox(sliders, layout={'flex_flow': 'row'})
+display(slider_box)
+interact(on_slider_change, **{f'val_{i}': sliders[i] for i in range(len(sliders))})
+
+# %%
+# Create a single vertical slider
+
+
+
+slider = FloatSlider(
+    value=0,
+    min=-5,
+    max=5,
+    step=0.01,
+    description='Timbre:',
+    orientation='vertical',
+    readout=True,
+    readout_format='.2f',
+    continuous_update=False
+)
+
+def on_slider_change(value):
+    """Called when slider value changes"""
+    # audio_sample = sound_files[int(value*len(sound_files))]  # Use the first sound file as an example
+    # y, sr_ = li.load(os.path.join('sounds', audio_sample), sr=None)
+    # y_scaled = y * value
+    # display(Audio(y_scaled, rate=sr_, normalize=False))  # Scale audio volume by slider valuedisplay(Audio(y, rate=sr_))  # Just an example action
+
+    audio_sample = sound_files[0]  # Use the first sound file as an example
+    y, sr_ = li.load(os.path.join('sounds', audio_sample), sr=None)
+
+    #encode with model and vae
+    encoding = model.encode(y)[0].squeeze(0).T  # shape: (1, latent_dim, time)
+    encoding_tensor = torch.tensor(encoding, dtype=torch.float32)
+
+    with torch.no_grad():
+        mu, logvar = vae.encode(encoding_tensor)
+        z = vae.reparameterize(mu, logvar)
+
+    # Shift the VAE encoding by slider value in dimension 0 and decode
+    z_shifted = z.clone()
+    z_shifted[:, 1] += value
+    with torch.no_grad():
+        vae_decoded = vae.decode(z_shifted)
+    vae_decoded_np = vae_decoded.numpy().T[np.newaxis, :, :]
+    recon_audio = model.decode(vae_decoded_np)
+    display(Audio(recon_audio, rate=sr_))
+
+
+    print(f"Slider value: {value}")
+    # print new attributes for sound
+    print(f"New attributes for sound at slider value {value}:")
+    ics = audio_features(recon_audio, sr=sr_)
+    for key, val in ics.items():
+        print(f"  {key}: {val}")
+
+
+    # Add your function logic here
+    # e.g., process audio, update visualization, etc.
+
+interact(on_slider_change, value=slider)
 # %%
