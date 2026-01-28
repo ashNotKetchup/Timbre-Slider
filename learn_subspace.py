@@ -26,10 +26,15 @@ control_model_location = 'control_models/vae_scripted_model.ts'
 model_type = 'STABLE_AUDIO'
 model = Model(model_type=model_type, model_path=[model_location])
 
+feature_type = 'audio_commons'
+# feature_type = 'raw_features'
+# feature_type = 'audio_commons'
+# feature_type = 'PCA'
+
 sr: int =44100
 # Get all sound files from the 'sounds' folder
 sound_files = [f for f in os.listdir('sounds') if f.endswith(('.wav', '.aif', '.mp3', '.ogg'))]
-sound_data = batch_compute_features(sound_files, use_recon=True, model=model)
+sound_data = batch_compute_features(sound_files, use_recon=True, model=model, feature_type=feature_type)
 
 
 latent_data, metadata_vectors, metadata_keys, input_dim, latent_dim = prepare_data(sound_data)

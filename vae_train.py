@@ -8,13 +8,13 @@ from scipy.signal import resample
 
 def prepare_data(sound_data):
         # Prepare latent encodings as training data
-        latent_encodings = [sound['encoding'].squeeze(0).T for sound in sound_data]  # shape: (time, dim)
+        # latent_encodings = [sound['encoding'].squeeze(0).T for sound in sound_data]  # shape: (time, dim)
 
         # Create metadata vectors from 'features_recon' for each sound, resampled to match encoding length
         metadata_vectors = []
         latent_encodings = []  # Also collect latent encodings here
-        metadata_keys = list(sound_data[0]['features_recon'].keys())
-        for sound in sound_data:
+        metadata_keys = sound_data[1]
+        for sound in sound_data[0]:
             features = []
             enc_len = sound['encoding'].shape[-1]
             # Collect latent encoding for this item
