@@ -6,7 +6,7 @@
 
 # Refactored: import from new modules
 from load_generative_model import Model
-from features import audio_features, batch_compute_features
+from features import audio_features, batch_compute_features, get_features
 from vae_train import VAE, prepare_data, train_vae
 from plotting import plot_loss
 from IPython.display import Audio, display
@@ -15,7 +15,9 @@ import numpy as np
 import os
 import torch
 import librosa as li
-
+from ipywidgets import FloatSlider, interact
+from interface import simple_timbre_slider_interface
+import pickle
 
 # %%
 # Model and data setup
@@ -31,25 +33,38 @@ feature_type = 'audio_commons'
 # feature_type = 'audio_commons'
 # feature_type = 'PCA'
 
+sample_folder = 'sounds'
+feature_save_path='features/' + sample_folder + model_type + '_' + feature_type + '_preprocessed_sound_data.pkl'
+
 sr: int =44100
-# Get all sound files from the 'sounds' folder
-sound_files = [f for f in os.listdir('sounds') if f.endswith(('.wav', '.aif', '.mp3', '.ogg'))]
-sound_data = batch_compute_features(sound_files, use_recon=True, model=model, feature_type=feature_type)
+# Get all sound files from the 'sample_folder' folder
+sound_files = [f for f in os.listdir(sample_folder) if f.endswith(('.wav', '.aif', '.mp3', '.ogg'))]
 
-
+# %%
+# Preprocess data
+sound_data = get_features(sound_files, feature_type, model=model, save_path=feature_save_path, overwrite=False)
 latent_data, metadata_vectors, metadata_keys, input_dim, latent_dim = prepare_data(sound_data)
-
-# Instantiate and train VAE
-vae = VAE(input_dim=input_dim, latent_dim=latent_dim)
-vae, loss_lists, labels = train_vae(vae, latent_data, metadata_vectors, num_epochs=500, batch_size=128, learning_rate=1e-4)
-
-# Plot VAE training losses, all scaled to [0, 1] for comparison
-plot_loss(loss_lists, labels)
-
 print(f'Timbre attributes are: {metadata_keys}')
 
-audio_sample = sound_files[1]  # Use the second sound file as an example
-y, sr_ = li.load(os.path.join('sounds', audio_sample), sr=None)
+
+# %%
+# Add a sample of our choice to the dataset
+example_sound_file = 'EX_Noise_120_waterfall_creaks.wav'  # Replace with your desired sound file
+example_folder = 'example_sounds'
+sound_files.append(batch_compute_features([example_sound_file], root_folder=example_folder, use_recon=True, model=model, feature_type=feature_type))
+
+
+# %%
+# Instantiate and train VAE
+vae = VAE(input_dim=input_dim, latent_dim=latent_dim)
+vae, loss_lists, loss_labels = train_vae(vae, latent_data, metadata_vectors, num_epochs=500, batch_size=128, learning_rate=1e-4)
+
+# Plot VAE training losses, all scaled to [0, 1] for comparison
+plot_loss(loss_lists, loss_labels)
+
+# %%
+# Audio example
+y, sr = li.load(os.path.join(example_folder, example_sound_file), sr=sr)
 
 # encode with model and vae
 encoding = model.encode(y)[0].squeeze(0).T  # shape: (1, latent_dim, time)
@@ -60,45 +75,77 @@ with torch.no_grad():
     z = vae.reparameterize(mu, logvar)
 
 # %%
-sliders = [FloatSlider(
-        value=z[:, i].mean().item(),
-        min=-5,
-        max=5,
-        step=0.01,
-        description=f'{key}:',
-        orientation='horizontal',
-        readout=True,
-        readout_format='.2f',
-        continuous_update=False
-    )
-for i, key in enumerate(metadata_keys)]
 
-# Use a dictionary to map slider names to slider widgets
-slider_kwargs = {f'slider_{i}': sliders[i] for i in range(len(sliders))}
+# Test VAE performance on the example sound
+# For each latent dimension i, intervening on z_i should cause a large, specific change in attribute a_i,
+# and minimal change in all other attributes.
 
+# A: Calculate effect size matrix
+def calculate_effect_size_matrix(vae, z_init, model, metadata_keys, delta=1.0, sr=44100, feature_type=feature_type):
+    """
+    For each latent dimension, move z along that axis and measure the change in audio attributes.
+    Returns a matrix of shape (num_latent_dims, num_attributes).
+    """
+    num_dims = z_init.shape[1]
+    num_attrs = len(metadata_keys)
+    effect_size_matrix = []
+    with torch.no_grad():
+        for i in range(num_dims):
+            # Perturb z along dimension i
+            delta_vals = [-1, -0.5, 0, 0.5, 1]
+            z_vals = []
+            for d in delta_vals:
+                z_new = z_init.clone()
+                z_new[:, i] += d
+                z_vals.append(z_new)
+            
+            # Decode to attribute space
+            recon_audio = [model.decode(vae.decode(z)) for z in z_vals]
+            attrs = [audio_features(audio, use_mean=True, feature_type=feature_type) for audio in recon_audio]
+            attrs_array = np.array([[attr[key] for key in metadata_keys] for attr in attrs])
+            correlations = np.corrcoef(delta_vals, attrs_array.T)
+            effect_size_matrix.append(correlations[0, 1:])  # Correlation of delta with each attribute
+    return effect_size_matrix
+
+calculate_effect_size_matrix(vae, z, model, metadata_keys, feature_type=feature_type)
+
+# Get initial values for each latent dimension
 initial_values = [z[:, i].mean().item() for i in range(len(metadata_keys))]
 
-def shift_timbre(**kwargs):
-    # Get slider values in order
-    slider_vals = [kwargs[f'slider_{i}'] for i in range(len(sliders))]
-    # print(f"Slider values: {slider_vals}")
-    z_shifted = z.clone()
-    for i, val in enumerate(slider_vals):
-        diff = val - initial_values[i]
-        z_shifted[:, i] += diff
+import matplotlib.pyplot as plt
+
+# For each axis in the latent space, vary it and plot the effect on each attribute
+num_steps = 11
+axis_range = np.linspace(-3, 3, num_steps)
+attribute_impacts = {key: [] for key in metadata_keys}
+
+for axis in range(len(metadata_keys)):
+    z_test = z.clone().detach().repeat(num_steps, 1)
+    for i, val in enumerate(axis_range):
+        z_test[i, axis] = val
     with torch.no_grad():
-        vae_decoded = vae.decode(z_shifted)
-    vae_decoded_np = vae_decoded.numpy().T[np.newaxis, :, :]
-    recon_audio = model.decode(vae_decoded_np)
-    display(Audio(recon_audio, rate=sr_, normalize=False))
-    # plot_spectrograms
-    # plot_latent_trajectory
-    # plot_features
+        recon_mu = vae.decode(z_test)
+    # Calculate attributes for each reconstruction
+    for i, key in enumerate(metadata_keys):
+        attribute_impacts[key].append(recon_mu[:, i].cpu().numpy())
+        [i]
 
-    ics = audio_features(recon_audio, sr=sr_)
-    for key, val in ics.items():
-        print(f"  {key}: {val}")
+# Plot
+fig, axs = plt.subplots(len(metadata_keys), 1, figsize=(8, 3 * len(metadata_keys)))
+if len(metadata_keys) == 1:
+    axs = [axs]
+for i, key in enumerate(metadata_keys):
+    for axis in range(len(metadata_keys)):
+        axs[i].plot(axis_range, [attr[i] for attr in attribute_impacts[key]], label=f'Axis {axis}')
+    axs[i].set_title(f'Impact of Latent Axes on Attribute: {key}')
+    axs[i].set_xlabel('Latent Value')
+    axs[i].set_ylabel('Attribute Value')
+    axs[i].legend()
+plt.tight_layout()
+plt.show()
 
 
+simple_timbre_slider_interface(metadata_keys, z, initial_values, vae, model, sr)
 # Use interact with the unpacked slider dictionary
-interact(shift_timbre, **slider_kwargs)
+# interact(shift_timbre, **slider_kwargs)
+# %%

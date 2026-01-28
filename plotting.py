@@ -52,7 +52,7 @@ def plot_sound_features(dataset, x_feature, y_feature, splits=None, labels=None,
 
 # Add other plotting functions as needed (plot_latent, plot_timbre_vs_encoding, plot_spectrograms, etc.)
 
-def plot_feature_alignment(model, sound_files, file_index=1, feature_names=None, plot_encoding_axes=True, vae=None):
+def plot_feature_alignment(model, sound_files, root_folder='sounds', file_index=1, feature_names=None, plot_encoding_axes=True, vae=None):
     """
     Loads a sound file, encodes and decodes it with the given model, computes audio features
     on the reconstruction, and plots features vs encoding axes over time.
@@ -69,7 +69,7 @@ def plot_feature_alignment(model, sound_files, file_index=1, feature_names=None,
     import matplotlib.pyplot as plt
 
     example_file = sound_files[file_index]
-    y, sr_ = li.load(os.path.join('sounds', example_file), sr=None)
+    y, sr_ = li.load(os.path.join(root_folder, example_file), sr=None)
 
     # Encode and decode
     encoding = model.encode(y)[0]  # shape: (1, latent_dim, time)
