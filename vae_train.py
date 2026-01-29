@@ -150,6 +150,11 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
         recon_epoch = 0
         kl_epoch = 0
         attr_epoch = 0
+
+        alpha = 1.0
+        beta = 0
+        theta = 10.0
+
         for i in range(0, latent_data.size(0), batch_size):
             idx = perm[i:i+batch_size]
             batch = latent_data[idx]
@@ -160,7 +165,7 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
             x_attr = metadata_data[idx]
             optimizer.zero_grad()
             recon, mu, logvar = vae(batch)
-            loss, (recon_loss, kl, attr_loss) = vae_loss(recon, batch, mu, logvar, x_attr, vae)
+            loss, (recon_loss, kl, attr_loss) = vae_loss(recon, batch, mu, logvar, x_attr, vae, alpha, beta, theta)
             loss.backward()
             optimizer.step()
             total_loss += loss.item()

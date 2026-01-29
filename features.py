@@ -5,7 +5,7 @@ import os
 import torch
 import timbral_models
 import pickle
-
+import pandas as pd
 def audio_features(audio_y, sr=44100, use_mean=False, feature_type='raw_features'):
     '''Compute timbre features for each audio file and its encoding'''
 
@@ -20,13 +20,13 @@ def audio_features(audio_y, sr=44100, use_mean=False, feature_type='raw_features
             'spectral_flatness': spectral_flatness.mean() if use_mean else spectral_flatness,
             'zero_crossing_rate': zero_crossings.mean() if use_mean else zero_crossings,
             'loudness': loudness.mean() if use_mean else loudness,
-            'pitch': pitch,
+            'pitch': pitch.mean() if use_mean else pitch,
         }
     elif feature_type == 'audio_commons':
         features = timbral_models.timbral_extractor(audio_y, sr, verbose=False)
-        if use_mean:
-            for key in features:
-                features[key] = features[key].mean()
+        # if use_mean:
+        #     for key in features:
+        #         features[key] = features[key].mean()
     return features
 
 def audio_commons_features(audio_y, sr=44100):
@@ -74,7 +74,8 @@ def batch_compute_features(sound_files,root_folder='sounds', use_recon=True, mod
                     }
             
         elif feature_type == 'audio_commons':
-            features = timbral_models.timbral_extractor(y_recon, sr, verbose=False)
+            features_all = timbral_models.timbral_extractor(y_recon, sr, verbose=False)
+            features = {k: features_all[k] for k in ['hardness', 'warmth', 'depth'] if k in features_all}
 
         try:
             audio_features_list.append(
@@ -112,3 +113,44 @@ def get_features(sound_files, feature_type, model=None, save_path=None, overwrit
             print(f'Saved preprocessed sound data to {save_path}.')
         return sound_data
 
+
+
+# Test VAE performance on the example sound
+# For each latent dimension i, intervening on z_i should cause a large, specific change in attribute a_i,
+# and minimal change in all other attributes.
+
+# A: Calculate effect size matrix
+def calculate_effect_size_matrix(vae, z_init, model, metadata_keys, delta_range=None, feature_type=None):
+    """
+    For each latent dimension, permute z along that axis for a batch of z vectors,
+    decode via vae and model, and calculate a list of attribute dicts as output.
+    Returns: DataFrame with columns [dim, x, ...attributes...]
+    """
+    if delta_range is None:
+        delta_range = np.linspace(-1, 1, 5)
+    if feature_type is None:
+        feature_type = 'audio_commons'
+    rows = []
+    num_dims = z_init.shape[1]
+    with torch.no_grad():
+        for dim in range(1):
+            for delta in delta_range:
+                z_perturbed = z_init.clone()
+                z_perturbed[:, dim] += float(delta)
+                # Prepare for decode if needed
+                recon_mu = vae.decode(z_perturbed)
+                if recon_mu.ndim == 2:
+                    recon_mu_for_decode = recon_mu.unsqueeze(-1)
+                else:
+                    recon_mu_for_decode = recon_mu
+                audio_recon = model.decode(recon_mu_for_decode)
+                attrs = audio_features(audio_recon, use_mean=True, feature_type=feature_type)
+                row = {
+                    "dim": dim,
+                    "x": delta,
+                    **{key: attrs[key] for key in attrs.keys()},
+                }
+                rows.append(row)
+    df = pd.DataFrame(rows, columns=["dim", "x"] + list(attrs.keys()))
+    print(df)
+    return df

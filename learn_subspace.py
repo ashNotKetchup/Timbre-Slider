@@ -6,9 +6,9 @@
 
 # Refactored: import from new modules
 from load_generative_model import Model
-from features import audio_features, batch_compute_features, get_features
+from features import audio_features, batch_compute_features, get_features, calculate_effect_size_matrix
 from vae_train import VAE, prepare_data, train_vae
-from plotting import plot_loss
+from plotting import plot_loss, plot_effect_size_correlations
 from IPython.display import Audio, display
 from ipywidgets import interact, FloatSlider
 import numpy as np
@@ -18,6 +18,7 @@ import librosa as li
 from ipywidgets import FloatSlider, interact
 from interface import simple_timbre_slider_interface
 import pickle
+import pandas as pd
 
 # %%
 # Model and data setup
@@ -75,77 +76,38 @@ with torch.no_grad():
     z = vae.reparameterize(mu, logvar)
 
 # %%
+effect_size_matrix = calculate_effect_size_matrix(vae, z, model, metadata_keys, feature_type=feature_type)
 
-# Test VAE performance on the example sound
-# For each latent dimension i, intervening on z_i should cause a large, specific change in attribute a_i,
-# and minimal change in all other attributes.
+# Visualize effect sizes using the plotting utility
+correlation_df, fig = plot_effect_size_correlations(effect_size_matrix, metadata_keys)
+print("Correlations between x and attributes for each dimension:")
+print(correlation_df)
 
-# A: Calculate effect size matrix
-def calculate_effect_size_matrix(vae, z_init, model, metadata_keys, delta=1.0, sr=44100, feature_type=feature_type):
-    """
-    For each latent dimension, move z along that axis and measure the change in audio attributes.
-    Returns a matrix of shape (num_latent_dims, num_attributes).
-    """
-    num_dims = z_init.shape[1]
-    num_attrs = len(metadata_keys)
-    effect_size_matrix = []
-    with torch.no_grad():
-        for i in range(num_dims):
-            # Perturb z along dimension i
-            delta_vals = [-1, -0.5, 0, 0.5, 1]
-            z_vals = []
-            for d in delta_vals:
-                z_new = z_init.clone()
-                z_new[:, i] += d
-                z_vals.append(z_new)
-            
-            # Decode to attribute space
-            recon_audio = [model.decode(vae.decode(z)) for z in z_vals]
-            attrs = [audio_features(audio, use_mean=True, feature_type=feature_type) for audio in recon_audio]
-            attrs_array = np.array([[attr[key] for key in metadata_keys] for attr in attrs])
-            correlations = np.corrcoef(delta_vals, attrs_array.T)
-            effect_size_matrix.append(correlations[0, 1:])  # Correlation of delta with each attribute
-    return effect_size_matrix
+# %%
 
-calculate_effect_size_matrix(vae, z, model, metadata_keys, feature_type=feature_type)
+# plot a dimension against all attributes
+import matplotlib.pyplot as plt
+
+def plot_dimension_effects(dimension_to_plot=0):
+    plt.figure(figsize=(10, 6))
+    df_dim = effect_size_matrix[effect_size_matrix['dim'] == dimension_to_plot]
+    for attr in metadata_keys:
+        plt.plot(df_dim['x'], df_dim[attr], label=attr)
+    plt.xlabel('Delta')
+    plt.ylabel('Attribute Change')
+    plt.title(f'Effect of Latent Dimension {dimension_to_plot} on Attributes')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+interact(plot_dimension_effects, dimension_to_plot=(0, latent_dim-1, 1))
+# plot_dimension_effects(dimension_to_plot=0)
+
+# %%
 
 # Get initial values for each latent dimension
 initial_values = [z[:, i].mean().item() for i in range(len(metadata_keys))]
 
-import matplotlib.pyplot as plt
-
-# For each axis in the latent space, vary it and plot the effect on each attribute
-num_steps = 11
-axis_range = np.linspace(-3, 3, num_steps)
-attribute_impacts = {key: [] for key in metadata_keys}
-
-for axis in range(len(metadata_keys)):
-    z_test = z.clone().detach().repeat(num_steps, 1)
-    for i, val in enumerate(axis_range):
-        z_test[i, axis] = val
-    with torch.no_grad():
-        recon_mu = vae.decode(z_test)
-    # Calculate attributes for each reconstruction
-    for i, key in enumerate(metadata_keys):
-        attribute_impacts[key].append(recon_mu[:, i].cpu().numpy())
-        [i]
-
-# Plot
-fig, axs = plt.subplots(len(metadata_keys), 1, figsize=(8, 3 * len(metadata_keys)))
-if len(metadata_keys) == 1:
-    axs = [axs]
-for i, key in enumerate(metadata_keys):
-    for axis in range(len(metadata_keys)):
-        axs[i].plot(axis_range, [attr[i] for attr in attribute_impacts[key]], label=f'Axis {axis}')
-    axs[i].set_title(f'Impact of Latent Axes on Attribute: {key}')
-    axs[i].set_xlabel('Latent Value')
-    axs[i].set_ylabel('Attribute Value')
-    axs[i].legend()
-plt.tight_layout()
-plt.show()
-
-
+# Interactive timbre slider interface
 simple_timbre_slider_interface(metadata_keys, z, initial_values, vae, model, sr)
-# Use interact with the unpacked slider dictionary
-# interact(shift_timbre, **slider_kwargs)
-# %%
+

@@ -49,7 +49,7 @@ def simple_timbre_slider_interface(metadata_keys, z, initial_values, vae, model,
         vae_decoded_np = vae_decoded.numpy().T[np.newaxis, :, :]
         recon_audio = model.decode(vae_decoded_np)
         display(Audio(recon_audio, rate=sr, normalize=True))
-        ics = audio_features(recon_audio, sr=sr)
+        ics = audio_features(recon_audio, sr=sr, use_mean=True)
         for key, val in ics.items():
             print(f"  {key}: {val}")
 

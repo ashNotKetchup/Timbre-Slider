@@ -4,6 +4,8 @@ from scipy.signal import resample
 import librosa as li
 import os
 import torch
+import pandas as pd
+import seaborn as sns
 
 def plot_sound_features(dataset, x_feature, y_feature, splits=None, labels=None, figsize=(12, 6), colors=None, markers=None, special_filename=None):
     special_color = '#e41a1c'  # red
@@ -152,3 +154,24 @@ def plot_loss(loss_lists, labels):
     plt.grid(True, linestyle='--', alpha=0.5)
     plt.tight_layout()
     plt.show()
+
+def plot_effect_size_correlations(effect_size_df, metadata_keys):
+    """
+    Given an effect size DataFrame and metadata_keys, compute correlations and plot heatmap.
+    Returns (correlation_df, fig)
+    """
+    correlations = {}
+    for dim in effect_size_df['dim'].unique():
+        df_dim = effect_size_df[effect_size_df['dim'] == dim]
+        corr_dict = {}
+        for attr in metadata_keys:
+            corr = df_dim['x'].corr(df_dim[attr])
+            corr_dict[attr] = corr
+        correlations[dim] = corr_dict
+
+    correlation_df = pd.DataFrame(correlations).T
+    fig, ax = plt.subplots(figsize=(10, 8))
+    sns.heatmap(correlation_df, annot=True, cmap='coolwarm', center=0, ax=ax)
+    ax.set_title("Heatmap of Correlations between x and Attributes for Each Dimension")
+    plt.tight_layout()
+    return correlation_df, fig
