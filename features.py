@@ -127,13 +127,13 @@ def calculate_effect_size_matrix(vae, z_init, model, metadata_keys, delta_range=
     Returns: DataFrame with columns [dim, x, ...attributes...]
     """
     if delta_range is None:
-        delta_range = np.linspace(-1, 1, 5)
+        delta_range = np.linspace(-2, 2, 5)
     if feature_type is None:
         feature_type = 'audio_commons'
     rows = []
     num_dims = z_init.shape[1]
     with torch.no_grad():
-        for dim in range(1):
+        for dim in range(3):
             for delta in delta_range:
                 z_perturbed = z_init.clone()
                 z_perturbed[:, dim] += float(delta)

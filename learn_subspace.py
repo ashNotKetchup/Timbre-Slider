@@ -29,10 +29,13 @@ control_model_location = 'control_models/vae_scripted_model.ts'
 model_type = 'STABLE_AUDIO'
 model = Model(model_type=model_type, model_path=[model_location])
 
-feature_type = 'audio_commons'
-# feature_type = 'raw_features'
+# feature_type = 'audio_commons'
+feature_type = 'raw_features'
 # feature_type = 'audio_commons'
 # feature_type = 'PCA'
+
+# Number of extra latent dimensions to add beyond the timbre attributes
+extra_dims = 0
 
 sample_folder = 'sounds'
 feature_save_path='features/' + sample_folder + model_type + '_' + feature_type + '_preprocessed_sound_data.pkl'
@@ -46,11 +49,11 @@ sound_files = [f for f in os.listdir(sample_folder) if f.endswith(('.wav', '.aif
 sound_data = get_features(sound_files, feature_type, model=model, save_path=feature_save_path, overwrite=False)
 latent_data, metadata_vectors, metadata_keys, input_dim, latent_dim = prepare_data(sound_data)
 print(f'Timbre attributes are: {metadata_keys}')
-
+latent_dim = len(metadata_keys) + extra_dims  # Adjust latent_dim if extra dims are added
 
 # %%
 # Add a sample of our choice to the dataset
-example_sound_file = 'EX_Noise_120_waterfall_creaks.wav'  # Replace with your desired sound file
+example_sound_file = 'UMRU_chord_loop_atmosphere_140_Abmin.wav'  # Replace with your desired sound file
 example_folder = 'example_sounds'
 sound_files.append(batch_compute_features([example_sound_file], root_folder=example_folder, use_recon=True, model=model, feature_type=feature_type))
 
@@ -58,7 +61,7 @@ sound_files.append(batch_compute_features([example_sound_file], root_folder=exam
 # %%
 # Instantiate and train VAE
 vae = VAE(input_dim=input_dim, latent_dim=latent_dim)
-vae, loss_lists, loss_labels = train_vae(vae, latent_data, metadata_vectors, num_epochs=500, batch_size=128, learning_rate=1e-4)
+vae, loss_lists, loss_labels = train_vae(vae, latent_data, metadata_vectors, num_epochs=700, batch_size=128, learning_rate=1e-4)
 
 # Plot VAE training losses, all scaled to [0, 1] for comparison
 plot_loss(loss_lists, loss_labels)
@@ -106,8 +109,10 @@ interact(plot_dimension_effects, dimension_to_plot=(0, latent_dim-1, 1))
 # %%
 
 # Get initial values for each latent dimension
-initial_values = [z[:, i].mean().item() for i in range(len(metadata_keys))]
+initial_values = [z[:, i].mean().item() for i in range(latent_dim)]
 
 # Interactive timbre slider interface
 simple_timbre_slider_interface(metadata_keys, z, initial_values, vae, model, sr)
 
+
+# %%

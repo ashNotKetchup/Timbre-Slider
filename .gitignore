@@ -10,6 +10,9 @@
 *.flac
 *.m4a
 
+# Images/Graphs
+*.png
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
