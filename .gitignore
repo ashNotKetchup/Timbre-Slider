@@ -1,5 +1,9 @@
 # Gen Models
 *.ts
+*.pt
+
+# Data files
+*.pkl
 
 # Audio files
 *.wav

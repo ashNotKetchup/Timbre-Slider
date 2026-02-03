@@ -22,47 +22,97 @@ import pandas as pd
 
 # %%
 # Model and data setup
-model_name: str = 'percussion'
+model_name: str = 'nasa'
+
 model_location:str = 'generative_models/'+model_name+'.ts'
 control_model_location = 'control_models/vae_scripted_model.ts'
+
+
 # model_type = 'RAVE'
 model_type = 'STABLE_AUDIO'
 model = Model(model_type=model_type, model_path=[model_location])
 
-# feature_type = 'audio_commons'
-feature_type = 'raw_features'
-# feature_type = 'audio_commons'
-# feature_type = 'PCA'
+feature_type = 'audio_commons'
+# feature_type = 'raw_features'
 
+# feature_type = 'PCA'
 # Number of extra latent dimensions to add beyond the timbre attributes
 extra_dims = 0
 
-sample_folder = 'sounds'
-feature_save_path='features/' + sample_folder + model_type + '_' + feature_type + '_preprocessed_sound_data.pkl'
+sample_folder = 'Foley'
+
+# sample_folder_paths = ['sounds/Foley', 'sounds/umru']
+
+# feature_save_path='features/' + sample_folder + model_type + '_' + feature_type + '_preprocessed_sound_data.pkl'
+feature_save_path = f'features/{os.path.basename(sample_folder)}_{model_type}_{feature_type}_preprocessed_sound_data.pkl'
 
 sr: int =44100
 # Get all sound files from the 'sample_folder' folder
 sound_files = [f for f in os.listdir(sample_folder) if f.endswith(('.wav', '.aif', '.mp3', '.ogg'))]
 
+
+
+
 # %%
 # Preprocess data
-sound_data = get_features(sound_files, feature_type, model=model, save_path=feature_save_path, overwrite=False)
+sound_data, feature_keys, pca = get_features(sound_files, feature_type, model=model, save_path=feature_save_path, overwrite=False,root_folder=sample_folder)
 latent_data, metadata_vectors, metadata_keys, input_dim, latent_dim = prepare_data(sound_data)
 print(f'Timbre attributes are: {metadata_keys}')
 latent_dim = len(metadata_keys) + extra_dims  # Adjust latent_dim if extra dims are added
 
 # %%
 # Add a sample of our choice to the dataset
-example_sound_file = 'UMRU_chord_loop_atmosphere_140_Abmin.wav'  # Replace with your desired sound file
+example_sound_file = 'EX_Noise_120_waterfall_creaks.wav'  # Replace with your desired sound file
 example_folder = 'example_sounds'
-sound_files.append(batch_compute_features([example_sound_file], root_folder=example_folder, use_recon=True, model=model, feature_type=feature_type))
+example_sound_features, _, pca = batch_compute_features([example_sound_file], root_folder=example_folder, use_recon=True, model=model, feature_type=feature_type, pca=pca)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+example_latent_data, example_metadata_vectors, example_metadata_keys, example_input_dim, example_latent_dim = prepare_data(example_sound_features, metadata_keys=metadata_keys)
+
+latent_data = torch.cat([latent_data, example_latent_data], dim=0)
+metadata_vectors.extend(example_metadata_vectors)
+print(f'After adding example, latent data shape: {latent_data.shape}, number of metadata vectors: {len(metadata_vectors)}')
+
+
 
 
 # %%
+
 # Instantiate and train VAE
 vae = VAE(input_dim=input_dim, latent_dim=latent_dim)
-vae, loss_lists, loss_labels = train_vae(vae, latent_data, metadata_vectors, num_epochs=700, batch_size=128, learning_rate=1e-4)
+vae, loss_lists, loss_labels = train_vae(vae, latent_data, metadata_vectors, num_epochs=200, batch_size=128, learning_rate=1e-3)
 
+# %%
+vae_save_name = f"{os.path.splitext(os.path.basename(feature_save_path))[0]}_{os.path.splitext(os.path.basename(example_sound_file))[0]}_vae.pt"
+vae_save_name += 'learning_rate_1e-3_epochs_200_batchsize_128.pt'
+# Optionally reload VAE from saved state
+vae_save_path = os.path.join("control_models", vae_save_name)
+if os.path.exists(vae_save_path):
+    vae.load_state_dict(torch.load(vae_save_path))
+    vae.eval()
+    print(f"Reloaded VAE from {vae_save_path}")
+# vae.load_state_dict(torch.load(vae_save_path))
+# vae.eval()
+vae_save_path = os.path.join("control_models", vae_save_name)
+torch.save(vae.state_dict(), vae_save_path)
+print(f"VAE saved to {vae_save_path}")
+
+# Save or load vae
+
+print("VAE training complete. VAE model has shape:", input_dim, "->", latent_dim, "->", input_dim)
 # Plot VAE training losses, all scaled to [0, 1] for comparison
 plot_loss(loss_lists, loss_labels)
 

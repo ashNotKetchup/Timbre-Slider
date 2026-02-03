@@ -8,6 +8,10 @@ import math
 from global_scaler import GlobalScaler, TimeCompressor
 import sys
 import os
+from dotenv import load_dotenv
+load_dotenv()
+if "HF_TOKEN" not in os.environ:
+    raise EnvironmentError("HF_TOKEN environment variable not set. Please set your HuggingFace token in the environment.")
 print(os.environ["HF_TOKEN"])
 
 base_dir = 'streamable-stable-audio-open' #replace with fork of shuoyangs repo
@@ -15,6 +19,7 @@ sys.path.append(f'{base_dir}')
 
 import torch
 from models import get_pretrained_pretransform
+from control_models.control_model import ControlModel
 from export import remove_parametrizations
 torch_250 = True if torch.__version__ >= "2.5" else False
 

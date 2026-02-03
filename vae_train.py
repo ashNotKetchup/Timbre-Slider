@@ -6,20 +6,24 @@ from itertools import product
 from scipy.signal import resample
 
 
-def prepare_data(sound_data):
+def prepare_data(sound_data, metadata_keys=None):
         # Prepare latent encodings as training data
         # latent_encodings = [sound['encoding'].squeeze(0).T for sound in sound_data]  # shape: (time, dim)
 
         # Create metadata vectors from 'features_recon' for each sound, resampled to match encoding length
         metadata_vectors = []
         latent_encodings = []  # Also collect latent encodings here
-        metadata_keys = sound_data[1]
-        for sound in sound_data[0]:
+        if metadata_keys is None:
+            metadata_keys = list(sound_data[0]['features_recon'].keys())
+        for sound in sound_data:
             features = []
             enc_len = sound['encoding'].shape[-1]
+
+
+
             # Collect latent encoding for this item
 
-            # Double the encoding length (resolution) for metadata and latent encoding
+            # (optional) Double the encoding length (resolution) for metadata and latent encoding
             enc_len = sound['encoding'].shape[-1] * 4
 
             # Resample latent encoding to new length and append
@@ -34,7 +38,7 @@ def prepare_data(sound_data):
                     vec = np.full(enc_len, val)
                 else:
                     vec = resample(val, enc_len, axis=-1)
-                    # print(vec.shape)
+                    print(f'Resampled feature "{key}": {vec.shape}')
 
                 features.append(vec)  # Each vec is (296, 1)
                 # After collecting all features, stack and transpose to (296, 5)
