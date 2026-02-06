@@ -131,7 +131,8 @@ def batch_compute_features(sound_files, root_folder='sounds', use_recon=True, mo
 
 
 def get_features(sound_files, feature_type, model=None, save_path=None, overwrite=False, root_folder = None):
-    save_path += '.pkl' if save_path and not save_path.endswith('.pkl') else ''
+    if save_path:
+        save_path += '.pkl' if save_path and not save_path.endswith('.pkl') else ''
     if save_path and os.path.exists(save_path) and not overwrite:
         with open(save_path, 'rb') as f:
             sound_data = pickle.load(f)

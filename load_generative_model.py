@@ -51,7 +51,7 @@ class Model:
     - decode: takes latent embeddings as a numpy array, returns audio as numpy array
     - get_info: gives information about the shape of the model
     """
-    def __init__(self, model_type='RAVE', model_path: Union[str, List[str]]=None):
+    def __init__(self, model_type='RAVE', model_path: Union[str, List[str]]=None, control_vae_path=None, control_vae_input_dim=None, control_vae_latent_dim=None) -> None:
 
         # TODO: change this to load a list, so that eg I can stack stable audio model on another encoder etc...
         self.model_type = model_type
@@ -90,8 +90,16 @@ class Model:
         else:
             raise ValueError(f"Unknown model_type: {self.model_type}")
 
+        self.control_model = None
+        if control_vae_path and control_vae_input_dim and control_vae_latent_dim:
+            self.control_model = ControlModel(control_vae_path, input_dim=control_vae_input_dim, latent_dim=control_vae_latent_dim)
+            print(f"Loaded control VAE from {control_vae_path} with input dim {control_vae_input_dim} and latent dim {control_vae_latent_dim}")
+        else:            print("Control VAE not loaded. To enable latent control, provide control_vae_path, control_vae_input_dim, and control_vae_latent_dim.")
+            # self.control_model = ControlModel(control_vae_path, input_dim=loaded_model.encode(torch.randn(1,1,44100)).shape[-1], latent_dim=16) #TODO: get these dimensions dynamically from the model instead of hardcoding
+        
 
         self.dimension_count = None
+     
 
     def __load_model(self, model_location: str):
         """
@@ -109,6 +117,8 @@ class Model:
             return 'Model Needs Encode'
         if loaded_model.decode == None:
             return 'Model Needs Decode'
+    
+        
         return loaded_model
 
     def encode(self, audio_array:np.ndarray, use_text:bool = False) -> Tuple[np.ndarray, str]:
@@ -146,7 +156,13 @@ class Model:
         # latent_vector:np.ndarray = encoding_torch.cpu().numpy()
         latent_text:str = 'I havent implemented text embeddings yet!'
         # log(f"Generated latent array of shape {latent_vector.shape}, max {latent_embedding.max()}, min {latent_embedding.min()}")
-
+        print(f"Generated latent vector of shape {latent_vector.shape}, max {latent_vector.max()}, min {latent_vector.min()}")
+        if self.control_model is not None:
+            # Optionally encode with VAE (control model)
+            latent_vector_flat = latent_vector.squeeze(0).T if latent_vector.ndim == 3 else latent_vector
+            vae_z, vae_mu, vae_logvar = self.control_model.encode(latent_vector_flat)
+            latent_vector = vae_z.T[np.newaxis, ...]  # reshape back to (1, latent_dim) for consistency
+            print(f"Final latent vector shape after control model (if applied): {latent_vector.shape}, max {latent_vector.max()}, min {latent_vector.min()}")
         return latent_vector, latent_text
 
     def decode(self, latent_vector:np.ndarray, latent_text:str='', use_text:bool=False) -> np.ndarray:
