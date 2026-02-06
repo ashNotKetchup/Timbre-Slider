@@ -175,7 +175,15 @@ class Model:
         Returns:
         Audio_file (x_hat): np array of shape [], where
         """
-        latent_torch: torch.Tensor = torch.Tensor(latent_vector)
+        print(f"[decode] Input latent_vector type: {type(latent_vector)}, shape: {getattr(latent_vector, 'shape', 'N/A')}")
+        if self.control_model is not None:
+            # Optionally decode with VAE (control model)   
+            print(f"[decode] Before control_model.decode, latent_vector shape: {latent_vector.shape}")
+            latent_vector =  self.control_model.decode(latent_vector.squeeze(0).T) 
+            print(f"[decode] After control_model.decode, latent_vector type: {type(latent_vector)}, shape: {getattr(latent_vector, 'shape', 'N/A')}")
+        print(f"[decode] Before torch conversion, latent_vector type: {type(latent_vector)}, shape: {getattr(latent_vector, 'shape', 'N/A')}")
+        latent_torch: torch.Tensor = torch.Tensor(latent_vector.T)
+        print(f"[decode] After torch conversion, latent_torch type: {type(latent_torch)}, shape: {getattr(latent_torch, 'shape', 'N/A')}")
 
         with torch.no_grad():
             # Use reduce to recursively apply the encode() method of each object
@@ -382,6 +390,7 @@ class LatentRepresentation:
         # print('labels: ', loaded_labels)
 
         loaded_data = np.array([value['data'] for key, value in items]).astype(np.float32)[np.newaxis, ...]
+        
         # print('data: ', loaded_data.shape)
         
         if re_scale:

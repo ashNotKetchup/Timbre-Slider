@@ -114,6 +114,13 @@ def handle_request_audio(message):
                 raise ValueError(f"Could not parse latent_data as JSON: {e}")
             if not isinstance(latent_data, dict):
                 raise ValueError("Expected a dictionary for latent_data after JSON parse, got {}".format(type(latent_data)))
+        print(f"Parsed latent data successfully. Keys: {list(latent_data.keys())}")
+        latent_representation.from_json(latent_data)
+        print("Extracted latent representation from JSON successfully.")
+        audio_out = gen_model.decode(*latent_representation.get_latent_representation())
+        print("Decoded audio from latent representation successfully.")
+        audio_handler.set_output_buffer(audio_out)
+        return {"type": "decoded", "content": "Decoded successfully"}
         print(latent_data['vae_z'].shape)
         vae_z_dict = latent_data['vae_z']
         dim_keys = sorted(vae_z_dict.keys(), key=lambda k: int(k.replace('dim', '')))
