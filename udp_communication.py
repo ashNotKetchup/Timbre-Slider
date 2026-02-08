@@ -72,7 +72,7 @@ def handle_request_latent(message):
 
         bias_array = [0 for _ in range(len(metadata_keys))]
         scale_array = [1 for _ in range(len(metadata_keys))]
-        latent_json['Bias'] = bias_array
+        latent_json['bias'] = bias_array
         latent_json['scale'] = scale_array
         latent_json['metadata_keys'] = metadata_keys
         
@@ -91,7 +91,7 @@ def handle_request_latent(message):
         #     "content": {
         #         "vae_z": vae_z_dict,
         #         "metadata_keys": metadata_keys,
-        #         "Bias": bias_array,
+        #         "bias": bias_array,
         #         "scale": scale_array
         #     }
         # }
@@ -117,7 +117,17 @@ def handle_request_audio(message):
         print(f"Parsed latent data successfully. Keys: {list(latent_data.keys())}")
         latent_representation.from_json(latent_data)
         print("Extracted latent representation from JSON successfully.")
-        audio_out = gen_model.decode(*latent_representation.get_latent_representation())
+        bias = np.array(latent_data['bias'], dtype=np.float32)
+        scale = np.array(latent_data['scale'], dtype=np.float32)
+        latent_vector, latent_text = latent_representation.get_latent_representation()
+
+        # Ensure bias/scale match the number of latent dims
+        n_latent = latent_vector.shape[1]
+        bias = bias[:n_latent].reshape(1, n_latent, 1)
+        scale = scale[:n_latent].reshape(1, n_latent, 1)
+        latent_vector_scaled = latent_vector * scale + bias
+        print("Successfully applied bias and scale to latent representation.")
+        audio_out = gen_model.decode(latent_vector_scaled, latent_text)
         print("Decoded audio from latent representation successfully.")
         audio_handler.set_output_buffer(audio_out)
         return {"type": "decoded", "content": "Decoded successfully"}
@@ -125,13 +135,7 @@ def handle_request_audio(message):
         vae_z_dict = latent_data['vae_z']
         dim_keys = sorted(vae_z_dict.keys(), key=lambda k: int(k.replace('dim', '')))
         vae_z_arr = np.stack([vae_z_dict[k] for k in dim_keys], axis=1)
-        bias = np.array(latent_data['Bias'], dtype=np.float32)
-        scale = np.array(latent_data['scale'], dtype=np.float32)
-        # Ensure bias/scale match the number of latent dims
-        n_latent = vae_z_arr.shape[1]
-        bias = bias[:n_latent]
-        scale = scale[:n_latent]
-        vae_z_arr = vae_z_arr * scale + bias
+
         # Try both (T, D) and (D, T) and pick the one that works
         try:
             vae_decoded = control_model.decode(vae_z_arr)
