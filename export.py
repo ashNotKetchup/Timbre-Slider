@@ -12,7 +12,7 @@ from pathlib import Path
 import torch
 torch_250 = True if torch.__version__ >= "2.5" else False
 
-from models import get_pretrained_pretransform
+from timbre_VAE.models import get_pretrained_pretransform
 
 import cached_conv as cc
 

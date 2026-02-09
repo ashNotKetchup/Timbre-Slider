@@ -5,10 +5,10 @@
 # %%
 
 # Refactored: import from new modules
-from load_generative_model import Model
-from features import audio_features, batch_compute_features, get_features, calculate_effect_size_matrix
-from vae_train import VAE, prepare_data, train_vae
-from plotting import plot_loss, plot_effect_size_correlations
+from timbre_VAE.load_generative_model import Model
+from timbre_VAE.features import audio_features, batch_compute_features, get_features, calculate_effect_size_matrix
+from timbre_VAE.vae_train import VAE, prepare_data, train_vae
+from timbre_VAE.plotting import plot_loss, plot_effect_size_correlations
 from IPython.display import Audio, display
 from ipywidgets import interact, FloatSlider
 import numpy as np
@@ -16,7 +16,7 @@ import os
 import torch
 import librosa as li
 from ipywidgets import FloatSlider, interact
-from interface import simple_timbre_slider_interface
+from timbre_VAE.interface import simple_timbre_slider_interface
 import pickle
 import pandas as pd
 
@@ -24,8 +24,8 @@ import pandas as pd
 # Model and data setup
 model_name: str = 'nasa'
 
-model_location:str = 'generative_models/'+model_name+'.ts'
-control_model_location = 'control_models/vae_scripted_model.ts'
+model_location:str = 'timbre_VAE/models/RAVE_models/generative_models/'+model_name+'.ts'
+control_model_location = 'precomputed/control_models/vae_scripted_model.ts'
 
 
 # model_type = 'RAVE'
@@ -39,12 +39,11 @@ feature_type = 'audio_commons'
 # Number of extra latent dimensions to add beyond the timbre attributes
 extra_dims = 0
 
-sample_folder = 'Foley'
+sample_folder = 'sounds/Foley'
 
 # sample_folder_paths = ['sounds/Foley', 'sounds/umru']
 
-# feature_save_path='features/' + sample_folder + model_type + '_' + feature_type + '_preprocessed_sound_data.pkl'
-feature_save_path = f'features/{os.path.basename(sample_folder)}_{model_type}_{feature_type}_preprocessed_sound_data.pkl'
+feature_save_path = f'precomputed/features/{os.path.basename(sample_folder)}_{model_type}_{feature_type}_preprocessed_sound_data.pkl'
 
 sr: int =44100
 # Get all sound files from the 'sample_folder' folder
@@ -63,7 +62,7 @@ latent_dim = len(metadata_keys) + extra_dims  # Adjust latent_dim if extra dims 
 # %%
 # Add a sample of our choice to the dataset
 example_sound_file = 'EX_Noise_120_waterfall_creaks.wav'  # Replace with your desired sound file
-example_folder = 'example_sounds'
+example_folder = 'sounds/example'
 example_sound_features, _, pca = batch_compute_features([example_sound_file], root_folder=example_folder, use_recon=True, model=model, feature_type=feature_type, pca=pca)
 
 
