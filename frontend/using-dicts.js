@@ -1,3 +1,61 @@
+/**
+ * Max for Live/Node.js script for communicating with a Python backend server via HTTP POST requests.
+ * Handles asynchronous dictionary operations and message passing between Max and Python.
+ *
+ * Constants:
+ * @constant {string} DICT_ID - The ID of the Max dict object used for storing representations.
+ * @constant {string} PROTOCOL - The protocol used for HTTP requests (e.g., "http://").
+ * @constant {string} HOST - The host address of the Python server.
+ * @constant {number} PORT - The port number of the Python server.
+ * @constant {string} URL - The full URL for sending requests to the Python server.
+ *
+ * Variables:
+ * @type {Object} initialDict - The initial value for the dict, used for reset and test operations.
+ *
+ * Functions:
+ * @function send
+ * @description Sends a message to the Python server and returns the parsed JSON reply.
+ * @param {Object} message - The message object to send (must include "type" and "content").
+ * @returns {Promise<Object>} - The reply from the Python server.
+ *
+ * Max API Handlers:
+ * @handler set
+ * @description Updates a value at a given path in the dict and outputs the updated dict.
+ * @param {string} path - The path in the dict to update.
+ * @param {*} value - The value to set at the specified path.
+ *
+ * @handler test_set
+ * @description Sets the dict to the initialDict value and outputs it.
+ * @param {string} ID - The ID for the test set operation (not used).
+ *
+ * @handler reset
+ * @description Resets the dict to its initial value and outputs it.
+ *
+ * @handler load
+ * @description Sends a request to the Python server to encode an audio file to a latent representation.
+ * Updates the dict with the returned latent representation.
+ * @param {string} filepath - The file path of the audio file to encode.
+ *
+ * @handler load_folder
+ * @description Sends a request to the Python server to load a folder and compute features for retraining.
+ * @param {string} folderPath - The path to the folder containing audio files.
+ *
+ * @handler retrain_vae
+ * @description Sends a request to the Python server to retrain the VAE using the most recently loaded features.
+ *
+ * @handler send
+ * @description Sends the current dict as a latent representation to the Python server for decoding.
+ * Outputs the dict after sending.
+ *
+ * @function main
+ * @description Stores the initial value of the dict on process start for use in reset operations.
+ *
+ * Message Types (in line with udp_communication.py):
+ * - "request_latent": Encodes audio to latent representation.
+ * - "request_audio": Decodes latent representation to audio.
+ * - "request_load_folder": Loads a folder and computes features for retraining.
+ * - "request_retrain_vae": Retrains the VAE using loaded features.
+ */
 const maxApi = require("max-api");
 const DICT_ID = "representations.dict";
 // Destination settings
@@ -83,6 +141,33 @@ maxApi.addHandlers({
 
 			//  Necessary to signal Max that the dict has been updated
 			await maxApi.outlet("Updated");
+		}
+	},
+	load_folder: async (folderPath) => {
+		const message = {
+			"type": "request_load_folder",
+			"content": folderPath
+		};
+		const reply = await send(message);
+		if (reply["type"] === "load_folder_done") {
+			console.log("Loaded folder and computed features:", reply["content"]);
+			await maxApi.outlet("Folder loaded");
+		} else {
+			console.error("Failed to load folder:", reply);
+			await maxApi.outlet("Folder load failed");
+		}
+	},
+	retrain_vae: async () => {
+		const message = {
+			"type": "request_retrain_vae"
+		};
+		const reply = await send(message);
+		if (reply["type"] === "retrain_done") {
+			console.log("VAE retraining complete:", reply["content"]);
+			await maxApi.outlet("Retrain done");
+		} else {
+			console.error("VAE retraining failed:", reply);
+			await maxApi.outlet("Retrain failed");
 		}
 	},
 	

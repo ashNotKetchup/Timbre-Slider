@@ -1,3 +1,4 @@
+
 import librosa as li
 import numpy as np
 from typing import List
@@ -5,6 +6,7 @@ from functools import reduce
 from timbre_VAE.logger import log
 import os
 import soundfile as sf
+from timbre_VAE.plotting import save_spectrogram
 
 
 class BufferManager:
@@ -59,20 +61,18 @@ class BufferManager:
         return True
 
 
-    def write_buffer(self, audio_array:np.array = None, buffer_name: str = 'output', folder_name:str = (os.getcwd()+'/audio')) -> bool:
-        """Write an audio np:array to a named file. TODO: Probably needs a better name
+    def write_buffer(self, audio_array: np.array = None, buffer_name: str = 'output', folder_name: str = (os.getcwd()+'/audio'), save_plot: bool = False) -> bool:
+        """Write an audio np:array to a named file. Optionally save a spectrogram plot.
         
         Test:
         test_writing
-
         """
-
         sr = 44100
         audio = audio_array
-
         filepath = os.path.join(folder_name, buffer_name) + ".wav"
         sf.write(filepath, audio, sr)
-        # log(f"created buffer name: '{buffer_name}' w/ framecount: {audio.shape[0]}")
+        if save_plot:
+            save_spectrogram(filepath)
         return True
 
 
@@ -82,7 +82,7 @@ class BufferManager:
     
     def get_output_buffer(self) -> np.ndarray:
         """Get the last written output buffer."""
-        return self.output_buffer
+        return self._output_audio
 
     def set_input_buffer(self, data: np.ndarray) -> bool:
         """Set the last read input buffer. Update max buffer too"""
@@ -91,8 +91,8 @@ class BufferManager:
         return True
 
 
-    def set_output_buffer(self, data: np.ndarray) -> bool:
-        """Set the last written output buffer. Internally, and optionally tell max to update"""
-        self.output_buffer = data
-        self.write_buffer(self.output_buffer, "output")
+    def set_output_buffer(self, data: np.ndarray, save_plot: bool = False) -> bool:
+        """Set the last written output buffer. Internally, and optionally tell max to update. Optionally save a spectrogram plot."""
+        self._output_audio = data
+        self.write_buffer(self._output_audio, "output", save_plot=save_plot)
         return True

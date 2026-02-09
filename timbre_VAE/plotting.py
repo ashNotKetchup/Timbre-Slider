@@ -6,6 +6,13 @@ import os
 import torch
 import pandas as pd
 import seaborn as sns
+import os
+import librosa
+import librosa.display
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.colors import LinearSegmentedColormap
+
 
 def plot_sound_features(dataset, x_feature, y_feature, splits=None, labels=None, figsize=(12, 6), colors=None, markers=None, special_filename=None):
     special_color = '#e41a1c'  # red
@@ -175,3 +182,42 @@ def plot_effect_size_correlations(effect_size_df, metadata_keys):
     ax.set_title("Heatmap of Correlations between x and Attributes for Each Dimension")
     plt.tight_layout()
     return correlation_df, fig
+
+
+
+def save_spectrogram(audio_path):
+    y, sr = librosa.load(audio_path)
+    D = librosa.stft(y)
+    S_db = librosa.amplitude_to_db(abs(D), ref=np.max)
+
+    custom_cmap = LinearSegmentedColormap.from_list('my_palette', 
+                                                    ["#64654200", 
+                                                     '#FC9563', 
+                                                     "#FF7530"])
+    dpi = 150
+    figsize = (12, 3)
+    plt.rcParams['figure.dpi'] = dpi
+
+    fig = plt.figure(figsize=figsize)
+    fig.patch.set_alpha(0)
+    ax = plt.gca()
+    ax.set_facecolor((0, 0, 0, 0))
+
+    text_color = '#FC9563'
+    librosa.display.specshow(S_db, sr=sr, x_axis='time', y_axis='log', cmap=custom_cmap)
+    ax.tick_params(axis='x', colors=text_color)
+    ax.tick_params(axis='y', colors=text_color)
+    ax.set_title('')
+    ax.set_xlabel('')
+    ax.set_ylabel('')
+    plt.box(False)
+    plt.tight_layout()
+
+    # Save next to audio file
+    base, ext = os.path.splitext(audio_path)
+    out_path = f"{base}_spectrogram.png"
+    plt.savefig(out_path, transparent=True)
+    plt.close(fig)
+    return out_path
+
+
