@@ -1,10 +1,10 @@
-from features import get_features
-from load_generative_model import Model
+from timbre_VAE.features import get_features
+from timbre_VAE.load_generative_model import Model
 import os
 
 model_name = 'nasa'
 model_type = 'STABLE_AUDIO'
-model_location = f'generative_models/{model_name}.ts'
+model_location = f'timbre_VAE/models/RAVE_models/generative_models/{model_name}.ts'
 model = Model(model_type=model_type, model_path=[model_location])
 
 feature_types = ['raw_features', 'audio_commons']
@@ -20,7 +20,7 @@ for sample_folder in sample_folder_paths:
         if f.endswith(('.wav', '.aif', '.mp3', '.ogg'))
     ]
     for feature_type in feature_types:
-        feature_save_path = f'features/{os.path.basename(sample_folder)}_{model_type}_{feature_type}_preprocessed_sound_data.pkl'
+        feature_save_path = f'precomputed/features/{os.path.basename(sample_folder)}_{model_type}_{feature_type}_preprocessed_sound_data.pkl'
         print(f'Processing {len(sound_files)} files in {sample_folder} with feature type {feature_type}')
         get_features(
             sound_files,

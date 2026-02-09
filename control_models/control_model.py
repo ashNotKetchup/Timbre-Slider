@@ -1,7 +1,7 @@
 import os
 import torch
 import numpy as np
-from vae_train import VAE
+from timbre_VAE.vae_train import VAE
 
 class ControlModel:
     """

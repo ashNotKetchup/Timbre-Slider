@@ -2,8 +2,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import random
 # from dummy_json import dummy_json
-from load_audio import BufferManager
-from load_generative_model import Model, LatentRepresentation, ControlModel
+from timbre_VAE.load_audio import BufferManager
+from timbre_VAE.load_generative_model import Model, LatentRepresentation, ControlModel
 import numpy as np
 import json
 
@@ -15,21 +15,21 @@ audio_handler = BufferManager()
 # --- CONFIGURATION (match learn_subspace.py) ---
 model_type = 'STABLE_AUDIO'
 model_name = 'percussion'  # or any other model name as needed
-model_location = f'generative_models/{model_name}.ts'
-vae_path = 'control_models/Foley_STABLE_AUDIO_audio_commons_preprocessed_sound_data_EX_Noise_120_waterfall_creaks_vae.pt'
+model_location = f'timbre_VAE/models/RAVE_models/generative_models/{model_name}.ts'
+vae_path = 'precomputed/control_models/Foley_STABLE_AUDIO_audio_commons_preprocessed_sound_data_EX_Noise_120_waterfall_creaks_vae.pt'
 feature_type = 'audio_commons'
-sample_folder = 'Foley'
+sample_folder = 'sounds/Foley'
 
 # Load generative model
 gen_model = Model(model_type=model_type, model_path=[model_location])
 
 # Get metadata keys using feature type (simulate learn_subspace.py logic)
 import os
-from features import get_features
+from timbre_VAE.features import get_features
 print(f'preprocessing files')
 sound_files = [f for f in os.listdir(sample_folder) if f.endswith(('.wav', '.aif', '.mp3', '.ogg'))][0]
 sound_data, feature_keys, _ = get_features([sound_files], feature_type, model=gen_model, save_path=None, overwrite=False, root_folder=sample_folder)
-from vae_train import prepare_data
+from timbre_VAE.vae_train import prepare_data
 _, _, metadata_keys, input_dim, latent_dim = prepare_data(sound_data)
 
 # Load with VAE
