@@ -180,8 +180,38 @@ def filter_attributes(array_of_dicts, key, n_clusters=3, random_state=0):
     Returns (selected_feature_names, reduced_dicts).
     """
     # Extract feature dicts and build DataFrame
-    feature_dicts = [d[key] for d in array_of_dicts]
+    # If feature values are arrays (e.g. time-series), unstack each array
+    # element into its own row so the DataFrame contains only scalars.
+    feature_dicts = []
+    for d in array_of_dicts:
+        fd = d[key]
+        # Check if any value is an array-like (ndarray with size > 1)
+        has_arrays = any(
+            isinstance(v, np.ndarray) and v.size > 1 for v in fd.values()
+        )
+        if has_arrays:
+            # Flatten every array value and expand into multiple scalar rows
+            flat = {}
+            for k, v in fd.items():
+                arr = np.asarray(v).ravel()
+                flat[k] = arr
+            # All arrays should have the same length after flattening
+            length = max(len(v) for v in flat.values())
+            for i in range(length):
+                row = {}
+                for k, v in flat.items():
+                    row[k] = v[i] if i < len(v) else np.nan
+                feature_dicts.append(row)
+        else:
+            # Already scalar values – keep as a single row
+            scalar_fd = {
+                k: (v.item() if isinstance(v, np.ndarray) and v.size == 1 else v)
+                for k, v in fd.items()
+            }
+            feature_dicts.append(scalar_fd)
     df = pd.DataFrame(feature_dicts)
+    print("[filter_attributes] DataFrame preview:")
+    print(df.head())
     print("[filter_attributes] Features DataFrame before filtering:")
     print(df)
     # Drop columns with non-numeric or all-NaN values
@@ -230,6 +260,10 @@ def filter_attributes(array_of_dicts, key, n_clusters=3, random_state=0):
     for d in array_of_dicts:
         reduced = {f: d[key][f] for f in selected_features if f in d[key]}
         reduced_dicts.append(reduced)
+
+    if len(selected_features) == 0:
+        print("[filter_attributes] No features selected after clustering. Returning input results.")
+        return list(df.columns), feature_dicts  # Return original features if none selected
 
     return selected_features, reduced_dicts
 

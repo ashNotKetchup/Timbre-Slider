@@ -23,7 +23,8 @@ model_type = 'RAVE'  # or 'STABLE_AUDIO', depending on the model you want to use
 model_name = 'percussion'  # or any other model name as needed
 model_location = f'timbre_VAE/models/RAVE_models/generative_models/{model_name}.ts'
 vae_path = 'precomputed/control_models/Foley_STABLE_AUDIO_audio_commons_preprocessed_sound_data_EX_Noise_120_waterfall_creaks_vae.pt'
-feature_type = 'audio_commons'
+# feature_type = 'audio_commons'
+feature_type = 'raw_features'
 sample_folder = 'sounds/Foley'
 feature_paths = None
 folder_path = None
@@ -40,6 +41,7 @@ print(f'preprocessing files')
 sound_files = [f for f in os.listdir(sample_folder) if f.endswith(('.wav', '.aif', '.mp3', '.ogg'))][0]
 sound_data, feature_keys, _ = get_features([sound_files], feature_type, model=gen_model, save_path=None, overwrite=False, root_folder=sample_folder)
 from timbre_VAE.vae_train import prepare_data, VAE, train_vae
+print(f'preparing data with feature keys: {feature_keys}')
 _, _, metadata_keys, input_dim, latent_dim = prepare_data(sound_data, metadata_keys=feature_keys)
 
 # Load with VAE
@@ -153,7 +155,7 @@ def handle_request_retrain_vae(message):
         vae = VAE(input_dim=input_dim_new, latent_dim=latent_dim_new)
         print("Training VAE...")
         vae, loss_lists, loss_labels = train_vae(vae, latent_data, metadata_vectors, num_epochs=250, batch_size=128, learning_rate=1e-3)
-        print(f"VAE trained. loss_lists: {loss_lists}, loss_labels: {loss_labels}")
+        print(f"VAE trained.") # loss_lists: {loss_lists}, loss_labels: {loss_labels}")
         # Update global model (in-memory)
         print("Updating timbre_gen_model with new VAE...")
         timbre_gen_model = Model(model_type=model_type, model_path=[model_location], control_vae_path=None, control_vae_input_dim=input_dim_new, control_vae_latent_dim=latent_dim_new)
