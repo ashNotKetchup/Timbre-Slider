@@ -18,8 +18,8 @@ audio_handler = BufferManager()
 
 
 # --- CONFIGURATION (match learn_subspace.py) ---
-model_type = 'STABLE_AUDIO'
-# model_type = 'RAVE'  # or 'STABLE_AUDIO', depending on the model you want to use
+# model_type = 'STABLE_AUDIO'
+model_type = 'RAVE'  # or 'STABLE_AUDIO', depending on the model you want to use
 model_name = 'percussion'  # or any other model name as needed
 model_location = f'timbre_VAE/models/RAVE_models/generative_models/{model_name}.ts'
 vae_path = 'precomputed/control_models/Foley_STABLE_AUDIO_audio_commons_preprocessed_sound_data_EX_Noise_120_waterfall_creaks_vae.pt'
@@ -137,7 +137,7 @@ def handle_request_retrain_vae(message):
             sound_data = sound_data + sample_sound_features
         print(f"Combined sound_data length: {len(sound_data)}")
         # TODO: Pick subset of metadata keys based on variance
-        print(f"Loaded sound_data: {len(sound_data)}")
+        print(f"Loaded sound_data: {len(sound_data)}, metadata_keys: {metadata_keys}, pca: {pca}")
 
         # Prepare data for the combined set
         latent_data, metadata_vectors, metadata_keys_new, input_dim_new, latent_dim_new = prepare_data(sound_data, metadata_keys=metadata_keys)
@@ -260,13 +260,42 @@ def handle_request_audio(message):
         print(f"Error handling latent message: {e}")
         return {"type": "error", "content": f"Error handling latent message: {e}"}
 
+# Handler for setting regularisation/model_type and reloading the generative model
+def handle_set_regularisation(message):
+    global feature_type, folder_path
+    reg_type = message.get('content')
+    print(f"Received set_regularisation request: {reg_type}")
+    valid_types = ['pca', 'raw_features', 'audio_commons']
+    if reg_type in valid_types:
+        feature_type = reg_type
+        print(f"Set feature_type to {feature_type}")
+        # Reload folder if already loaded
+        if folder_path:
+            print(f"Reloading folder {folder_path} with new feature_type...")
+            folder_reply = handle_request_load_folder({'content': folder_path})
+            if folder_reply.get("type") == "error":
+                return folder_reply
+            return {
+                "type": "set_regularisation_done",
+                "content": f"Set feature_type to {feature_type} and reloaded folder: {folder_path}."
+            }
+        else:
+            return {
+                "type": "set_regularisation_done",
+                "content": f"Set feature_type to {feature_type}. No folder loaded yet."
+            }
+    else:
+        print(f"Unknown regularisation type: {reg_type}")
+        return {"type": "error", "content": f"Unknown regularisation type: {reg_type}"}
+
 
 # --- Switch map/dictionary ---
 handlers = {
     "request_latent": handle_request_latent,
     "request_audio": handle_request_audio,
     "request_load_folder": handle_request_load_folder,
-    "request_retrain_vae": handle_request_retrain_vae
+    "request_retrain_vae": handle_request_retrain_vae,
+    "set_regularisation": handle_set_regularisation
 }
 
 

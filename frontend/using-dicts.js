@@ -1,3 +1,5 @@
+
+
 /**
  * Max for Live/Node.js script for communicating with a Python backend server via HTTP POST requests.
  * Handles asynchronous dictionary operations and message passing between Max and Python.
@@ -65,7 +67,11 @@ const PORT = 5000;
 
 const URL = `${PROTOCOL}${HOST}:${PORT}`;
 
-// Used for storing the initial value
+// List of regularisation options
+let regularisationOptions = ['pca', 'raw_features', 'semantic'];
+// Replace 'semantic' with 'audio_commons' if present
+regularisationOptions = regularisationOptions.map(opt => opt === 'semantic' ? 'audio_commons' : opt);
+
 let initialDict = {
         "name": "Test Object",
         "tags": ["alpha", "beta", "gamma"],
@@ -105,6 +111,32 @@ const send = async (message) => {
 };
 
 maxApi.addHandlers({
+	set_regularisation: async (index) => {
+		const idx = parseInt(index, 10);
+		if (!isNaN(idx) && idx >= 0 && idx < regularisationOptions.length) {
+			const selected = regularisationOptions[idx];
+			console.log(`Regularisation set to: ${selected}`);
+			// Send the choice to the Python server
+			const message = {
+				type: "set_regularisation",
+				content: selected
+			};
+			try {
+				const reply = await send(message);
+				if (reply && reply.type === "set_regularisation_done") {
+					await maxApi.outlet(`Regularisation set to: ${selected}`);
+				} else {
+					await maxApi.outlet("Failed to set regularisation");
+				}
+			} catch (err) {
+				console.error("Error sending regularisation to server:", err);
+				await maxApi.outlet("Error setting regularisation");
+			}
+		} else {
+			console.warn('Invalid regularisation index:', index);
+			await maxApi.outlet('Invalid regularisation index');
+		}
+	},
 // Handle commands/messages from Max inlet
 	set: async (path, value) => {
 		const dict = await maxApi.updateDict(DICT_ID, path, value);
