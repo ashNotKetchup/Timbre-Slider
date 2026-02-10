@@ -61,6 +61,7 @@ def prepare_data(sound_data, metadata_keys=None):
         return latent_data, metadata_vectors, metadata_keys, input_dim, latent_dim
 
 class VAE(nn.Module):
+        
     def __init__(self, input_dim, latent_dim):
         super().__init__()
         self.encoder = nn.Sequential(
@@ -91,6 +92,13 @@ class VAE(nn.Module):
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
         return mu + eps * std
+
+    def encode_z(self, x):
+            """
+            Returns the latent vector z (reparameterized sample) given input x.
+            """
+            mu, logvar = self.encode(x)
+            return self.reparameterize(mu, logvar)
 
     def decode(self, z):
         return self.decoder(z)

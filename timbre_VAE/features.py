@@ -1,3 +1,4 @@
+from sklearn.cluster import KMeans
 import numpy as np
 import librosa as li
 from scipy.signal import resample
@@ -125,40 +126,112 @@ def batch_compute_features(sound_files, root_folder='sounds', use_recon=True, mo
         except Exception as e:
             print(f"Error processing {sound_file}: {e}")
 
+    key_features, reduced_dicts = filter_attributes(audio_features_list, 'features_recon', n_clusters=3)
     print(f"\nSuccessfully processed {len(audio_features_list)} files.")
     print('shapes of features_recon:', [{k: v.shape if isinstance(v, np.ndarray) else 'scalar' for k, v in item['features_recon'].items()} for item in audio_features_list])
-    return audio_features_list, list(features.keys()), pca
+    return audio_features_list, key_features, pca
 
 
 def get_features(sound_files, feature_type, model=None, save_path=None, overwrite=False, root_folder = None):
     if save_path:
-        save_path += '.pkl' if save_path and not save_path.endswith('.pkl') else ''
-    if save_path and os.path.exists(save_path) and not overwrite:
-        with open(save_path, 'rb') as f:
-            sound_data = pickle.load(f)
-            # Also load PCA if available
-            pca_path = save_path.replace('.pkl', '_pca.pkl')
+        save_path += '.pkl' if not save_path.endswith('.pkl') else ''
+        key_features_path = save_path.replace('.pkl', '_key_features.pkl')
+        pca_path = save_path.replace('.pkl', '_pca.pkl')
+
+        # Try loading cached data
+        if os.path.exists(save_path) and not overwrite:
+            with open(save_path, 'rb') as f:
+                sound_data = pickle.load(f)
+            # Load PCA if available
+            pca = None
             if os.path.exists(pca_path):
                 with open(pca_path, 'rb') as pf:
                     pca = pickle.load(pf)
+            # Load key_features if available
+            if os.path.exists(key_features_path):
+                with open(key_features_path, 'rb') as kf:
+                    key_features = pickle.load(kf)
             else:
-                pca = None
-        print(f'Loaded preprocessed sound data from {save_path}.')
-        return sound_data, None, pca
-    else:
-        sound_data, feature_keys, pca = batch_compute_features(sound_files, use_recon=True, model=model, feature_type=feature_type, root_folder=root_folder)
-        if save_path:
-            with open(save_path, 'wb') as f:
-                pickle.dump(sound_data, f)
-            
-            #Save PCA if applicable
-            if pca is not None:
-                pca_path = save_path.replace('.pkl', '_pca.pkl')
-                with open(pca_path, 'wb') as pf:
-                    pickle.dump(pca, pf)
-            print(f'Saved preprocessed sound data to {save_path}.')
-        return sound_data, feature_keys, pca
+                key_features, _ = filter_attributes(sound_data, 'features_recon')
+                with open(key_features_path, 'wb') as kf:
+                    pickle.dump(key_features, kf)
+            print(f'Loaded preprocessed sound data from {save_path}.')
+            return sound_data, key_features, pca
 
+    # Compute features and save if needed
+    sound_data, key_features, pca = batch_compute_features(sound_files, use_recon=True, model=model, feature_type=feature_type, root_folder=root_folder)
+    if save_path:
+        with open(save_path, 'wb') as f:
+            pickle.dump(sound_data, f)
+        with open(key_features_path, 'wb') as kf:
+            pickle.dump(key_features, kf)
+        if pca is not None:
+            with open(pca_path, 'wb') as pf:
+                pickle.dump(pca, pf)
+        print(f'Saved preprocessed sound data to {save_path}.')
+    return sound_data, key_features, pca
+
+
+# --- Feature clustering and selection ---
+def filter_attributes(array_of_dicts, key, n_clusters=3, random_state=0):
+    """
+    Given a list of dicts (dataset) and a key (e.g. 'features_recon'),
+    clusters the features (columns) and selects the feature with the highest variance from each cluster.
+    Returns (selected_feature_names, reduced_dicts).
+    """
+    # Extract feature dicts and build DataFrame
+    feature_dicts = [d[key] for d in array_of_dicts]
+    df = pd.DataFrame(feature_dicts)
+    print("[filter_attributes] Features DataFrame before filtering:")
+    print(df)
+    # Drop columns with non-numeric or all-NaN values
+    df = df.select_dtypes(include=[np.number]).dropna(axis=1, how='all')
+    if df.shape[1] == 0:
+        print("[filter_attributes] All features are NaN or non-numeric. No valid features to cluster.")
+        return [], []
+    # Fallback: if only one row, return all features
+    if len(df) == 1:
+        print("[filter_attributes] Only one sample present. Returning all features.")
+        selected_features = list(df.columns)
+        reduced_dicts = [{f: df.iloc[0][f] for f in selected_features}]
+        return selected_features, reduced_dicts
+    # Additional check: if all values in all columns are NaN
+    if df.isna().all().all():
+        print("[filter_attributes] All feature values are NaN after filtering. Returning empty results.")
+        return [], []
+
+    # Cluster features (columns)
+    X = df.values
+    X = np.nan_to_num(X)  # Replace NaNs with 0 for clustering
+    # Transpose: cluster columns (features)
+    X_T = X.T
+    n_clusters = min(n_clusters, X_T.shape[0])
+    kmeans = KMeans(n_clusters=n_clusters, random_state=random_state, n_init=10)
+    cluster_labels = kmeans.fit_predict(X_T)
+
+    # For each cluster, select the feature with the highest variance
+    selected_features = []
+    for cluster in range(n_clusters):
+        cluster_cols = df.columns[cluster_labels == cluster]
+        if len(cluster_cols) == 0:
+            continue
+        # Compute variance for each feature in the cluster
+        variances = df[cluster_cols].var(axis=0)
+        # Only consider features with non-NaN variance
+        valid_variances = variances.dropna()
+        if valid_variances.empty:
+            # Skip this cluster if all variances are NaN
+            continue
+        best_feature = valid_variances.idxmax()
+        selected_features.append(best_feature)
+
+    # Reduce each dict to only selected features
+    reduced_dicts = []
+    for d in array_of_dicts:
+        reduced = {f: d[key][f] for f in selected_features if f in d[key]}
+        reduced_dicts.append(reduced)
+
+    return selected_features, reduced_dicts
 
 
 # Test VAE performance on the example sound
@@ -179,7 +252,7 @@ def calculate_effect_size_matrix(vae, z_init, model, metadata_keys, delta_range=
     rows = []
     num_dims = z_init.shape[1]
     with torch.no_grad():
-        for dim in range(3):
+        for dim in range(num_dims):
             for delta in delta_range:
                 z_perturbed = z_init.clone()
                 z_perturbed[:, dim] += float(delta)

@@ -123,9 +123,9 @@ y, sr = li.load(os.path.join(example_folder, example_sound_file), sr=sr)
 encoding = model.encode(y)[0].squeeze(0).T  # shape: (1, latent_dim, time)
 encoding_tensor = torch.tensor(encoding, dtype=torch.float32)
 
+
 with torch.no_grad():
-    mu, logvar = vae.encode(encoding_tensor)
-    z = vae.reparameterize(mu, logvar)
+    z = vae.encode_z(encoding_tensor)
 
 # %%
 effect_size_matrix = calculate_effect_size_matrix(vae, z, model, metadata_keys, feature_type=feature_type)

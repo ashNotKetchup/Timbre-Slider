@@ -132,6 +132,7 @@ class Model:
         Returns:
         Latent representation (y) a np array of shape []
         """
+        print("[DEBUG] Model.encode self.control_model is None:", self.control_model is None, "id:", id(self.control_model))
         # check type, convert np to torch, so we can take both....
         # print(type(audio_array))
         # print('ENCODING')
@@ -160,8 +161,10 @@ class Model:
         if self.control_model is not None:
             # Optionally encode with VAE (control model)
             latent_vector_flat = latent_vector.squeeze(0).T if latent_vector.ndim == 3 else latent_vector
-            vae_z, vae_mu, vae_logvar = self.control_model.encode(latent_vector_flat)
+            with torch.no_grad():
+                vae_z = self.control_model.encode_z(torch.from_numpy(latent_vector_flat))
             latent_vector = vae_z.T[np.newaxis, ...]  # reshape back to (1, latent_dim) for consistency
+            latent_vector = latent_vector.cpu().numpy() if hasattr(latent_vector, "cpu") else np.array(latent_vector)
             print(f"Final latent vector shape after control model (if applied): {latent_vector.shape}, max {latent_vector.max()}, min {latent_vector.min()}")
         return latent_vector, latent_text
 
@@ -177,18 +180,34 @@ class Model:
         """
         print(f"[decode] Input latent_vector type: {type(latent_vector)}, shape: {getattr(latent_vector, 'shape', 'N/A')}")
         if self.control_model is not None:
-            # Optionally decode with VAE (control model)   
+            # Optionally decode with VAE (control model)
             print(f"[decode] Before control_model.decode, latent_vector shape: {latent_vector.shape}")
-            latent_vector =  self.control_model.decode(latent_vector.squeeze(0).T) 
+            # Use encode_z for consistency if needed in future (currently decode expects z)
+            latent_vector = self.control_model.decode(torch.tensor(latent_vector.squeeze(0).T))
             print(f"[decode] After control_model.decode, latent_vector type: {type(latent_vector)}, shape: {getattr(latent_vector, 'shape', 'N/A')}")
         print(f"[decode] Before torch conversion, latent_vector type: {type(latent_vector)}, shape: {getattr(latent_vector, 'shape', 'N/A')}")
-        latent_torch: torch.Tensor = torch.Tensor(latent_vector.T)
-        print(f"[decode] After torch conversion, latent_torch type: {type(latent_torch)}, shape: {getattr(latent_torch, 'shape', 'N/A')}")
-
-        with torch.no_grad():
-            # Use reduce to recursively apply the encode() method of each object
-            decoded_audio_torch: torch.Tensor = reduce(lambda z, each_decoder: each_decoder.decode(z), reversed(self.models), latent_torch) #does f.decode(g.decode(x)) for a list of models [f,g] and input laternt_representation
-            # y = reduce(self.__encode, )
+        
+        
+        # Try both transpositions for latent_vector to torch.Tensor
+        try:
+            latent_torch = torch.Tensor(latent_vector.T)
+            if latent_torch.ndim == 2:
+                latent_torch = latent_torch.unsqueeze(0)  # add batch dimension if missing
+            print(f"[decode] Trying latent_vector.T: {latent_torch.shape}")
+            with torch.no_grad():
+                decoded_audio_torch = reduce(lambda z, each_decoder: each_decoder.decode(z), reversed(self.models), latent_torch)
+        except Exception as e1:
+            print(f"[decode] latent_vector.T failed: {e1}")
+            try:
+                latent_torch = torch.Tensor(latent_vector)
+                if latent_torch.ndim == 2:
+                    latent_torch = latent_torch.unsqueeze(0)  # add batch dimension if missing
+                print(f"[decode] Trying latent_vector (no transpose): {latent_torch.shape}")
+                with torch.no_grad():
+                    decoded_audio_torch = reduce(lambda z, each_decoder: each_decoder.decode(z), reversed(self.models), latent_torch)
+            except Exception as e2:
+                print(f"[decode] latent_vector (no transpose) also failed: {e2}")
+                raise RuntimeError("Both latent_vector.T and latent_vector failed for decoding.") from e2
 
         decoded_audio = decoded_audio_torch.numpy(force=True) # size (1,2,length), which we don't want
 

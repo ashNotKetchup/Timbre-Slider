@@ -8,7 +8,7 @@ def slider_to_audio(position, audio_sample, sorted_corpus, latent_model, control
     alpha = position - left_index
     encoding = audio_sample['encoding']
     if control_model is not None:
-        encoding = control_model.encode(encoding)
+        encoding = control_model.model.encode_z(torch.tensor(encoding, dtype=torch.float32))
     interp_latent = encoding + position
     if control_model is not None:
         interp_latent = control_model.decode(interp_latent)

@@ -117,8 +117,7 @@ def plot_feature_alignment(model, sound_files, root_folder='sounds', file_index=
         encoding_flat = encoding.squeeze(0).T  # shape: (time, dim)
         encoding_flat_tensor = torch.tensor(encoding_flat, dtype=torch.float32)
         with torch.no_grad():
-            mu, logvar = vae.encode(encoding_flat_tensor)
-            z = vae.reparameterize(mu, logvar)
+            z = vae.encode_z(encoding_flat_tensor)
         vae_encoding = z.numpy().T  # shape: (latent_dim, time)
 
     plt.figure(figsize=(15, 3 * len(features_dict)))

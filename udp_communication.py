@@ -19,6 +19,7 @@ audio_handler = BufferManager()
 
 # --- CONFIGURATION (match learn_subspace.py) ---
 model_type = 'STABLE_AUDIO'
+# model_type = 'RAVE'  # or 'STABLE_AUDIO', depending on the model you want to use
 model_name = 'percussion'  # or any other model name as needed
 model_location = f'timbre_VAE/models/RAVE_models/generative_models/{model_name}.ts'
 vae_path = 'precomputed/control_models/Foley_STABLE_AUDIO_audio_commons_preprocessed_sound_data_EX_Noise_120_waterfall_creaks_vae.pt'
@@ -39,12 +40,25 @@ print(f'preprocessing files')
 sound_files = [f for f in os.listdir(sample_folder) if f.endswith(('.wav', '.aif', '.mp3', '.ogg'))][0]
 sound_data, feature_keys, _ = get_features([sound_files], feature_type, model=gen_model, save_path=None, overwrite=False, root_folder=sample_folder)
 from timbre_VAE.vae_train import prepare_data, VAE, train_vae
-_, _, metadata_keys, input_dim, latent_dim = prepare_data(sound_data)
+_, _, metadata_keys, input_dim, latent_dim = prepare_data(sound_data, metadata_keys=feature_keys)
 
 # Load with VAE
 # control_model = ControlModel(vae_path, input_dim=input_dim, latent_dim=latent_dim)
-timbre_gen_model = Model(model_type=model_type, model_path=[model_location], control_vae_path=vae_path, control_vae_input_dim=input_dim, control_vae_latent_dim=latent_dim)
+timbre_gen_model = None
 
+# try:
+#     timbre_gen_model = Model(
+#         model_type=model_type,
+#         model_path=[model_location],
+#         control_vae_path=vae_path,
+#         control_vae_input_dim=input_dim,
+#         control_vae_latent_dim=latent_dim
+#     )
+#     print("Loaded timbre_gen_model successfully.")
+# except Exception as e:
+#     print(f"No suitable model available or failed to load: {e}")
+#     print("You need to retrain the model before use.")
+#     
 print(f'Loaded generative model and VAE with metadata keys: {metadata_keys}, latent dim: {latent_dim} and input dim: {input_dim}')
 
 # --- NEW: Handler for loading a folder, computing features, and retraining VAE ---
@@ -90,7 +104,9 @@ def handle_request_load_folder(message):
 
 # New: Handler for retraining VAE using last loaded features
 def handle_request_retrain_vae(message):
-    global feature_paths, folder_path, audio_path, gen_model, metadata_keys, _last_loaded_features
+    global feature_paths, folder_path, audio_path, metadata_keys, _last_loaded_features
+    global timbre_gen_model
+    print(f"[Debug] timbre_gen_model before retrain: {timbre_gen_model}, ID: {id(timbre_gen_model)} ")
     try:
         # Load features for folder
         print(f'features {feature_paths}')
@@ -103,7 +119,7 @@ def handle_request_retrain_vae(message):
         else:
             raise ValueError('feature_save_path not found in either _last_loaded_features or global feature_paths')
         print(f"Retraining VAE using features from: {feature_save_path}")
-        sound_data, feature_keys, pca = get_features(
+        sound_data, metadata_keys, pca = get_features(
             [f for f in os.listdir(folder_path) if f.endswith(('.wav', '.aif', '.mp3', '.ogg'))],
             feature_type,
             model=gen_model,
@@ -114,15 +130,17 @@ def handle_request_retrain_vae(message):
 
         # Load features for sample
         sample_sound_features, _, _ = batch_compute_features([audio_path], root_folder='', use_recon=True, model=gen_model, feature_type=feature_type)
-        print(f"example_sound_features: {sample_sound_features}")
+        
         # Append the example features to the main sound_data list
-        sound_data = sound_data + sample_sound_features
+        if sample_sound_features:
+            print(f"example_sound_features: {sample_sound_features}")
+            sound_data = sound_data + sample_sound_features
         print(f"Combined sound_data length: {len(sound_data)}")
         # TODO: Pick subset of metadata keys based on variance
         print(f"Loaded sound_data: {len(sound_data)}")
 
         # Prepare data for the combined set
-        latent_data, metadata_vectors, metadata_keys_new, input_dim_new, latent_dim_new = prepare_data(sound_data)
+        latent_data, metadata_vectors, metadata_keys_new, input_dim_new, latent_dim_new = prepare_data(sound_data, metadata_keys=metadata_keys)
         print(f"prepare_data output: latent_data shape {latent_data.shape}, metadata_keys_new: {metadata_keys_new}, input_dim_new: {input_dim_new}, latent_dim_new: {latent_dim_new}")
     # else:
         #     print("No example file to add, preparing data from sound_data only.")
@@ -137,9 +155,10 @@ def handle_request_retrain_vae(message):
         vae, loss_lists, loss_labels = train_vae(vae, latent_data, metadata_vectors, num_epochs=250, batch_size=128, learning_rate=1e-3)
         print(f"VAE trained. loss_lists: {loss_lists}, loss_labels: {loss_labels}")
         # Update global model (in-memory)
-        print("Updating gen_model with new VAE...")
-        gen_model = Model(model_type=model_type, model_path=[model_location], control_vae_path=None, control_vae_input_dim=input_dim_new, control_vae_latent_dim=latent_dim_new)
-        gen_model.control_vae = vae
+        print("Updating timbre_gen_model with new VAE...")
+        timbre_gen_model = Model(model_type=model_type, model_path=[model_location], control_vae_path=None, control_vae_input_dim=input_dim_new, control_vae_latent_dim=latent_dim_new)
+        timbre_gen_model.control_model = vae
+        print(f"[DEBUG] timbre_gen_model.control_model is None after update: {timbre_gen_model.control_model is None}, id: {id(timbre_gen_model.control_model)}")
         print(f"Retrained VAE and updated model for folder: {_last_loaded_features['folder_path']}")
         handle_request_latent({"type": "request_latent", "content": audio_path})
         print(f"Re-encoded example audio with new VAE for file: {audio_path}")
@@ -149,7 +168,7 @@ def handle_request_retrain_vae(message):
         return {"type": "error", "content": f"Error retraining VAE: {e}"}
 
 def handle_request_latent(message):
-    global audio_path, metadata_keys
+    global audio_path, metadata_keys, timbre_gen_model
     filepath = message['content']
     print("Python received file path to encode:", filepath)
 
@@ -164,6 +183,8 @@ def handle_request_latent(message):
         return {"type": "error", "content": f"Error loading audio: {e}"}
 
     try:
+        # Debug: check if control_model is set
+        print("[DEBUG] timbre_gen_model.control_model is None:", timbre_gen_model.control_model is None, "id:", id(timbre_gen_model.control_model))
         # Encode with generative model
         latent_vector, latent_text = timbre_gen_model.encode(audio_in)
         assert isinstance(latent_vector, np.ndarray) and isinstance(latent_text, str), 'encodings not right type'
