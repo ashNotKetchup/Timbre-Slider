@@ -96,10 +96,13 @@ def batch_compute_features(sound_files, root_folder='sounds', use_recon=True, mo
                 'zero_crossing_rate': (li.feature.zero_crossing_rate(y_recon).mean() if use_mean else li.feature.zero_crossing_rate(y_recon)),
                 'loudness': (li.feature.rms(y=y_recon).mean() if use_mean else li.feature.rms(y=y_recon)),
                 'pitch': get_pitch(y_recon, sr),
+                'spectral_bandwidth': (li.feature.spectral_bandwidth(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_bandwidth(y=y_recon, sr=sr)),
+                'spectral_rolloff': (li.feature.spectral_rolloff(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_rolloff(y=y_recon, sr=sr)),
+                'spectral_contrast': (li.feature.spectral_contrast(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_contrast(y=y_recon, sr=sr)),
             }
         elif feature_type == 'audio_commons':
             features_all = timbral_models.timbral_extractor(y_recon, sr, verbose=False)
-            features = {k: features_all[k] for k in ['hardness', 'warmth', 'depth'] if k in features_all}
+            features = {k: features_all[k] for k in ['hardness', 'warmth', 'depth', 'brightness', 'roughness', 'sharpness', 'boominess'] if k in features_all}
         elif feature_type == 'PCA':
             # Use the same flattening as in the first pass
             # enc_flat = enc.squeeze(0).reshape(enc.shape[1], -1)
@@ -126,7 +129,7 @@ def batch_compute_features(sound_files, root_folder='sounds', use_recon=True, mo
         except Exception as e:
             print(f"Error processing {sound_file}: {e}")
 
-    key_features, reduced_dicts = filter_attributes(audio_features_list, 'features_recon', n_clusters=3)
+    key_features, reduced_dicts = filter_attributes(audio_features_list, 'features_recon')
     print(f"\nSuccessfully processed {len(audio_features_list)} files.")
     print('shapes of features_recon:', [{k: v.shape if isinstance(v, np.ndarray) else 'scalar' for k, v in item['features_recon'].items()} for item in audio_features_list])
     return audio_features_list, key_features, pca
@@ -173,7 +176,7 @@ def get_features(sound_files, feature_type, model=None, save_path=None, overwrit
 
 
 # --- Feature clustering and selection ---
-def filter_attributes(array_of_dicts, key, n_clusters=3, random_state=0):
+def filter_attributes(array_of_dicts, key, n_clusters=4, random_state=0):
     """
     Given a list of dicts (dataset) and a key (e.g. 'features_recon'),
     clusters the features (columns) and selects the feature with the highest variance from each cluster.
@@ -236,6 +239,7 @@ def filter_attributes(array_of_dicts, key, n_clusters=3, random_state=0):
     # Transpose: cluster columns (features)
     X_T = X.T
     n_clusters = min(n_clusters, X_T.shape[0])
+    print(f"[filter_attributes] Clustering {X_T.shape[0]} features into {n_clusters} clusters.")
     kmeans = KMeans(n_clusters=n_clusters, random_state=random_state, n_init=10)
     cluster_labels = kmeans.fit_predict(X_T)
 
@@ -247,6 +251,7 @@ def filter_attributes(array_of_dicts, key, n_clusters=3, random_state=0):
             continue
         # Compute variance for each feature in the cluster
         variances = df[cluster_cols].var(axis=0)
+        print(f"[filter_attributes] Variances for cluster {cluster}: {variances}")
         # Only consider features with non-NaN variance
         valid_variances = variances.dropna()
         if valid_variances.empty:
@@ -265,6 +270,7 @@ def filter_attributes(array_of_dicts, key, n_clusters=3, random_state=0):
         print("[filter_attributes] No features selected after clustering. Returning input results.")
         return list(df.columns), feature_dicts  # Return original features if none selected
 
+    print(f"[filter_attributes] Selected features: {selected_features}")
     return selected_features, reduced_dicts
 
 

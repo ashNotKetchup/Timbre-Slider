@@ -202,7 +202,7 @@ def handle_request_latent(message):
         scale_array = [1 for _ in range(len(metadata_keys))]
         latent_json['bias'] = bias_array
         latent_json['scale'] = scale_array
-        latent_json['metadata_keys'] = metadata_keys
+        latent_json['metadata_keys'] = [k.replace('_', ' ').title() for k in metadata_keys]
 
         return {"type": "latent", "content": latent_json}
         # # vae_z as dict of axes, Bias/scale as arrays
