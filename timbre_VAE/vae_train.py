@@ -151,6 +151,12 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
     vae.train()
     epochs = num_epochs
     batch_size = batch_size
+
+    # Pre-concatenate metadata once (was previously inside the batch loop)
+    metadata_data = torch.tensor(
+        np.concatenate(metadata_vectors, axis=0), dtype=torch.float32
+    )
+
     total_loss_history = []
     recon_loss_history = []
     kl_loss_history = []
@@ -176,10 +182,6 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
         for i in range(0, latent_data.size(0), batch_size):
             idx = perm[i:i+batch_size]
             batch = latent_data[idx]
-            # metadata_vectors is a list of arrays, each (num_features, enc_len)
-            # We need to concatenate all metadata_vectors along the time axis to match latent_data
-            metadata_data = np.concatenate([m for m in metadata_vectors], axis=0)  # shape: (total_time, num_features)
-            metadata_data = torch.tensor(metadata_data, dtype=torch.float32)
             x_attr = metadata_data[idx]
             optimizer.zero_grad()
             recon, mu, logvar = vae(batch)

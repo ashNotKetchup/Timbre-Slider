@@ -97,17 +97,30 @@ let initialDict = {
 //		* Async Functions on MDN: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/async_function
 
 // form for sending messages to python server and receiving replies
-const send = async (message) => {	
-	const res = await fetch(URL, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify(message)
-	});
-	
-	// python -> node response
-	const reply = await res.json();
-	console.log("Node received reply of type:", reply["type"]);
-	return reply;
+const send = async (message, timeoutMs = 300000) => {	
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), timeoutMs);
+	try {
+		const res = await fetch(URL, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(message),
+			signal: controller.signal
+		});
+		clearTimeout(timer);
+		
+		// python -> node response
+		const reply = await res.json();
+		console.log("Node received reply of type:", reply["type"]);
+		return reply;
+	} catch (err) {
+		clearTimeout(timer);
+		if (err.name === 'AbortError') {
+			console.error("Request timed out after", timeoutMs, "ms");
+			return { type: "error", content: "Request timed out" };
+		}
+		throw err;
+	}
 };
 
 maxApi.addHandlers({
@@ -151,6 +164,8 @@ maxApi.addHandlers({
 	reset: async () => {
 		const dict = await maxApi.setDict(DICT_ID, initialDict);
 		await maxApi.outlet(dict);
+		//  Necessary to signal Max that the dict has been updated
+		await maxApi.outlet("Updated");
 	},
 	// types of messages are 'load' ('request_latent' or 'encode') and 'send' (AKA 'sending_latent' or 'decode')
 	load: async (filepath) => {
@@ -196,7 +211,14 @@ maxApi.addHandlers({
 		const reply = await send(message);
 		if (reply["type"] === "retrain_done") {
 			console.log("VAE retraining complete:", reply["content"]);
-			await maxApi.outlet("Retrain done");
+			// If the reply includes latent data, update the dict
+			if (reply["latent"]) {
+				console.log("Received latent representation after retrain:", reply["latent"]);
+				const dict = await maxApi.setDict(DICT_ID, reply["latent"]);
+				await maxApi.outlet(dict);
+				await maxApi.outlet("Updated");
+			}
+			await maxApi.outlet("Retrain complete");
 		} else {
 			console.error("VAE retraining failed:", reply);
 			await maxApi.outlet("Retrain failed");

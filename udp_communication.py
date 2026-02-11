@@ -189,9 +189,16 @@ def handle_request_retrain_vae(message):
         timbre_gen_model.control_model = vae
         print(f"[DEBUG] timbre_gen_model.control_model is None after update: {timbre_gen_model.control_model is None}, id: {id(timbre_gen_model.control_model)}")
         print(f"Retrained VAE and updated model for folder: {_last_loaded_features['folder_path']}")
-        handle_request_latent({"type": "request_latent", "content": audio_path})
+        # Encode the example audio with the new VAE and include latent in reply
+        latent_reply = handle_request_latent({"type": "request_latent", "content": audio_path})
         print(f"Re-encoded example audio with new VAE for file: {audio_path}")
-        return {"type": "retrain_vae", "content": f"VAE retrained for {_last_loaded_features['folder_path']} (sample added: {audio_path})"}
+        result = {
+            "type": "retrain_done",
+            "content": f"VAE retrained for {_last_loaded_features['folder_path']} (sample added: {audio_path})"
+        }
+        if latent_reply and latent_reply.get("type") == "latent":
+            result["latent"] = latent_reply["content"]
+        return result
     except Exception as e:
         print(f"Error in handle_request_retrain_vae: {e}")
         return {"type": "error", "content": f"Error retraining VAE: {e}"}
@@ -359,11 +366,14 @@ class SimpleHandler(BaseHTTPRequestHandler):
             reply = {"type": "error", "content": f"Unknown message type: {msg_type}"}
         
         reply_bytes = json.dumps(reply).encode()
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(reply_bytes)))
-        self.end_headers()
-        self.wfile.write(reply_bytes)
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(reply_bytes)))
+            self.end_headers()
+            self.wfile.write(reply_bytes)
+        except BrokenPipeError:
+            print(f"[Warning] Client disconnected before response was sent (type: {reply.get('type', 'unknown')})")
 
         print("Python sent reply of type:", reply['type'])
 
