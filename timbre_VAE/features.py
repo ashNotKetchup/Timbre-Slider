@@ -49,39 +49,11 @@ def batch_compute_features(sound_files, root_folder='sounds', use_recon=True, mo
     '''
     audio_features_list = []
 
-    all_encodings = []
-
-    # First pass: collect all encodings for PCA if needed
-    if feature_type == 'PCA':
-        if pca is None:
-            for sound_file in sound_files:
-                print(f"Processing {sound_file} ({len(all_encodings)+1}/{len(sound_files)})")
-                path = os.path.join(root_folder, sound_file)
-                y, sr = li.load(path, sr=None)
-                with torch.no_grad():
-                    enc = model.encode(y)[0]
-            # enc is (1, dim, time) -> squeeze batch, then flatten time
-            enc_flat = enc.squeeze(0).reshape(enc.shape[1], -1)  # (dim, time)
-            # print(f'Encoding shape for {sound_file}: {enc_flat.shape}')
-            all_encodings.append(enc_flat)
-
-            # Concatenate along the time axis: result shape (latent_dim, total_time)
-            all_encodings_np = np.concatenate(all_encodings, axis=1)
-            print(f'Fitting PCA on encodings of shape: {all_encodings_np.shape}')
-            pca = PCA(n_components=pca_dim)
-            pca.fit(all_encodings_np.T)
-            # pca.
-    else:
-        pca = None
-
-# TODO: IMPORTANT: MAKE SURE THAT THE PCA FITTED ON TRAINING DATA IS APPLIED TO EVERYHTING ELSE, NOT REFITTED!
-
-    # Second pass: compute features for each file
     for sound_file in sound_files:
         path = os.path.join(root_folder, sound_file)
         if use_recon and model is None:
             raise ValueError("Model must be provided if use_recon is True.")
-        if feature_type not in ['raw_features', 'audio_commons', 'PCA']:
+        if feature_type not in ['raw_features', 'audio_commons', 'PCA', 'pca']:
             raise ValueError(f"Unsupported feature_type: {feature_type}")
 
         y, sr = li.load(path, sr=None)
@@ -89,7 +61,7 @@ def batch_compute_features(sound_files, root_folder='sounds', use_recon=True, mo
             enc = model.encode(y)[0]
             y_recon = model.decode(enc) if use_recon else None
 
-        if feature_type == 'raw_features':
+        if feature_type == 'raw_features' or feature_type == 'pca':
             features = {
                 'spectral_centroid': (li.feature.spectral_centroid(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_centroid(y=y_recon, sr=sr)),
                 'spectral_flatness': (li.feature.spectral_flatness(y=y_recon).mean() if use_mean else li.feature.spectral_flatness(y=y_recon)),
@@ -103,14 +75,7 @@ def batch_compute_features(sound_files, root_folder='sounds', use_recon=True, mo
         elif feature_type == 'audio_commons':
             features_all = timbral_models.timbral_extractor(y_recon, sr, verbose=False)
             features = {k: features_all[k] for k in ['hardness', 'warmth', 'depth', 'brightness', 'roughness', 'sharpness', 'boominess'] if k in features_all}
-        elif feature_type == 'PCA':
-            # Use the same flattening as in the first pass
-            # enc_flat = enc.squeeze(0).reshape(enc.shape[1], -1)
-            enc = enc.squeeze(0).T  # shape: (time, dim)
-            print(f'shape of encoding for {sound_file}: {enc.shape}')
-            pca_features = pca.transform(enc).squeeze()
-            print(f'PCA features shape for {sound_file}: {pca_features.shape}')
-            features = {f'pca_{i}': pca_features[i] for i in range(pca_dim)}
+        
 
         try:
             audio_features_list.append(
@@ -129,7 +94,10 @@ def batch_compute_features(sound_files, root_folder='sounds', use_recon=True, mo
         except Exception as e:
             print(f"Error processing {sound_file}: {e}")
 
-    key_features, reduced_dicts = filter_attributes(audio_features_list, 'features_recon')
+    if feature_type == 'PCA' or feature_type == 'pca':
+        key_features, _, pca = pca_attributes(audio_features_list, 'features_recon')
+    else:
+        key_features, _ = filter_attributes(audio_features_list, 'features_recon')
     print(f"\nSuccessfully processed {len(audio_features_list)} files.")
     print('shapes of features_recon:', [{k: v.shape if isinstance(v, np.ndarray) else 'scalar' for k, v in item['features_recon'].items()} for item in audio_features_list])
     return audio_features_list, key_features, pca
@@ -272,6 +240,95 @@ def filter_attributes(array_of_dicts, key, n_clusters=4, random_state=0):
 
     print(f"[filter_attributes] Selected features: {selected_features}")
     return selected_features, reduced_dicts
+
+
+
+# --- Feature PCA and selection ---
+def pca_attributes(array_of_dicts, key, n_dim=4, random_state=0):
+    """
+    Given a list of dicts (dataset) and a key (e.g. 'features_recon'),
+    fit PCA on the features and project each sample into n_dim principal components.
+
+    Fits on all unstacked rows, then applies pca.transform() to each sample's
+    original data so output shape matches input shape (scalar → scalar, array → array).
+
+    Returns (selected_feature_names, reduced_dicts, pca).
+    """
+    # --- 1. Unstack all samples into scalar rows to fit PCA ---
+    all_rows = []
+    for d in array_of_dicts:
+        fd = d[key]
+        has_arrays = any(
+            isinstance(v, np.ndarray) and v.size > 1 for v in fd.values()
+        )
+        if has_arrays:
+            flat = {k: np.asarray(v).ravel() for k, v in fd.items()}
+            length = max(len(v) for v in flat.values())
+            for i in range(length):
+                all_rows.append({k: v[i] if i < len(v) else np.nan for k, v in flat.items()})
+        else:
+            all_rows.append({
+                k: (v.item() if isinstance(v, np.ndarray) and v.size == 1 else v)
+                for k, v in fd.items()
+            })
+
+    df = pd.DataFrame(all_rows)
+    print("[pca_attributes] DataFrame preview:")
+    print(df.head())
+
+    # --- 2. Clean up ---
+    df = df.select_dtypes(include=[np.number]).dropna(axis=1, how='all')
+    feature_cols = list(df.columns)
+    if len(feature_cols) == 0:
+        print("[pca_attributes] All features are NaN or non-numeric.")
+        return [], [], None
+    if len(df) <= 1:
+        print("[pca_attributes] Not enough rows for PCA.")
+        return [], [], None
+    if df.isna().all().all():
+        print("[pca_attributes] All values NaN.")
+        return [], [], None
+
+    # --- 3. Fit PCA ---
+    X = np.nan_to_num(df.values)
+    n_components = min(n_dim, X.shape[0], X.shape[1])
+    pca = PCA(n_components=n_components, random_state=random_state)
+    pca.fit(X)
+
+    selected_features = [f"Dim {i+1}" for i in range(n_components)]
+    print(f"[pca_attributes] Explained variance ratio: {pca.explained_variance_ratio_}")
+    print(f"[pca_attributes] Total explained variance: {pca.explained_variance_ratio_.sum():.4f}")
+    print(f"[pca_attributes] Selected PCA dimensions: {selected_features}")
+
+    # --- 4. Apply fitted PCA to each sample's original features ---
+    reduced_dicts = []
+    for d in array_of_dicts:
+        fd = d[key]
+        has_arrays = any(
+            isinstance(v, np.ndarray) and v.size > 1 for v in fd.values()
+        )
+        if has_arrays:
+            flat = {k: np.asarray(v).ravel() for k, v in fd.items()}
+            length = max(len(v) for v in flat.values())
+            sample_matrix = np.array([
+                [flat[k][i] if i < len(flat[k]) else np.nan for k in feature_cols]
+                for i in range(length)
+            ])
+            projected = pca.transform(np.nan_to_num(sample_matrix))  # (length, n_components)
+            reduced_dicts.append({
+                f: projected[:, i] for i, f in enumerate(selected_features)
+            })
+        else:
+            row = np.array([[
+                (fd[k].item() if isinstance(fd[k], np.ndarray) and fd[k].size == 1 else fd[k])
+                for k in feature_cols
+            ]])
+            projected = pca.transform(np.nan_to_num(row))  # (1, n_components)
+            reduced_dicts.append({
+                f: float(projected[0, i]) for i, f in enumerate(selected_features)
+            }) 
+
+    return selected_features, reduced_dicts, pca
 
 
 # Test VAE performance on the example sound

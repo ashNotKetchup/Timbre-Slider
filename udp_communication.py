@@ -24,7 +24,8 @@ model_name = 'percussion'  # or any other model name as needed
 model_location = f'timbre_VAE/models/RAVE_models/generative_models/{model_name}.ts'
 vae_path = 'precomputed/control_models/Foley_STABLE_AUDIO_audio_commons_preprocessed_sound_data_EX_Noise_120_waterfall_creaks_vae.pt'
 # feature_type = 'audio_commons'
-feature_type = 'raw_features'
+# feature_type = 'raw_features'
+feature_type = 'pca'  # or 'raw_features', 'audio_commons', 'pca'
 sample_folder = 'sounds/Foley'
 feature_paths = None
 folder_path = None
@@ -38,8 +39,16 @@ gen_model = Model(model_type=model_type, model_path=[model_location])
 import os
 from timbre_VAE.features import get_features
 print(f'preprocessing files')
-sound_files = [f for f in os.listdir(sample_folder) if f.endswith(('.wav', '.aif', '.mp3', '.ogg'))][0]
-sound_data, feature_keys, _ = get_features([sound_files], feature_type, model=gen_model, save_path=None, overwrite=False, root_folder=sample_folder)
+sound_files = [f for f in os.listdir(sample_folder) if f.endswith(('.wav', '.aif', '.mp3', '.ogg'))]
+# PCA uses raw_features underneath
+compute_type = 'raw_features' if feature_type in ('pca', 'PCA') else feature_type
+sound_data, feature_keys, _ = get_features(sound_files, compute_type, model=gen_model, save_path=None, overwrite=False, root_folder=sample_folder)
+# For PCA, project features now so prepare_data can find the PCA keys
+if feature_type in ('pca', 'PCA'):
+    from timbre_VAE.features import pca_attributes
+    feature_keys, reduced_dicts, _ = pca_attributes(sound_data, 'features_recon')
+    for i, rd in enumerate(reduced_dicts):
+        sound_data[i]['features_recon'] = rd
 from timbre_VAE.vae_train import prepare_data, VAE, train_vae
 print(f'preparing data with feature keys: {feature_keys}')
 _, _, metadata_keys, input_dim, latent_dim = prepare_data(sound_data, metadata_keys=feature_keys)
@@ -86,7 +95,8 @@ def handle_request_load_folder(message):
                                         model_name=model_name, 
                                         model_type=model_type, 
                                         overwrite=False)
-        feature_save_path = feature_paths[feature_type]
+        cache_key = 'raw_features' if feature_type in ('pca', 'PCA') else feature_type
+        feature_save_path = feature_paths[cache_key]
         # print(f"Using features from: {feature_save_path}")
 
         # Store for retraining
@@ -110,35 +120,52 @@ def handle_request_retrain_vae(message):
     global timbre_gen_model
     print(f"[Debug] timbre_gen_model before retrain: {timbre_gen_model}, ID: {id(timbre_gen_model)} ")
     try:
+        # Determine which folder to use
+        active_folder = folder_path or sample_folder
+        if not active_folder or not os.path.isdir(active_folder):
+            raise ValueError(f'No valid folder path available (folder_path={folder_path}, sample_folder={sample_folder})')
+
         # Load features for folder
         print(f'features {feature_paths}')
-        # Prefer _last_loaded_features, fallback to global
+        # Prefer _last_loaded_features, fallback to global, fallback to computing fresh
+        cache_key = 'raw_features' if feature_type in ('pca', 'PCA') else feature_type
         feature_save_path = None
         if _last_loaded_features and 'feature_save_paths' in _last_loaded_features:
-            feature_save_path = _last_loaded_features['feature_save_paths'][feature_type]
+            feature_save_path = _last_loaded_features['feature_save_paths'].get(cache_key)
         elif feature_paths:
-            feature_save_path = feature_paths[feature_type]
-        else:
-            raise ValueError('feature_save_path not found in either _last_loaded_features or global feature_paths')
-        print(f"Retraining VAE using features from: {feature_save_path}")
+            feature_save_path = feature_paths.get(cache_key) if isinstance(feature_paths, dict) else feature_paths
+
+        print(f"Retraining VAE using features from: {feature_save_path or '(computing fresh)'}")
+        # PCA uses raw_features underneath — load/compute as raw_features, project later
+        compute_type = 'raw_features' if feature_type in ('pca', 'PCA') else feature_type
         sound_data, metadata_keys, pca = get_features(
-            [f for f in os.listdir(folder_path) if f.endswith(('.wav', '.aif', '.mp3', '.ogg'))],
-            feature_type,
+            [f for f in os.listdir(active_folder) if f.endswith(('.wav', '.aif', '.mp3', '.ogg'))],
+            compute_type,
             model=gen_model,
             save_path=feature_save_path,
             overwrite=False,
-            root_folder=folder_path
+            root_folder=active_folder
         )
 
-        # Load features for sample
-        sample_sound_features, _, _ = batch_compute_features([audio_path], root_folder='', use_recon=True, model=gen_model, feature_type=feature_type)
+        # Load features for sample — compute raw features, PCA is applied on the combined set
+        sample_sound_features, _, _ = batch_compute_features([audio_path], root_folder='', use_recon=True, model=gen_model, feature_type=compute_type)
         
         # Append the example features to the main sound_data list
         if sample_sound_features:
             print(f"example_sound_features: {sample_sound_features}")
             sound_data = sound_data + sample_sound_features
         print(f"Combined sound_data length: {len(sound_data)}")
-        # TODO: Pick subset of metadata keys based on variance
+
+        # Re-run feature selection on the combined data so all samples share the same keys
+        if feature_type in ('pca', 'PCA'):
+            from timbre_VAE.features import pca_attributes
+            metadata_keys, reduced_dicts, pca = pca_attributes(sound_data, 'features_recon')
+            for i, rd in enumerate(reduced_dicts):
+                sound_data[i]['features_recon'] = rd
+        else:
+            from timbre_VAE.features import filter_attributes
+            metadata_keys, _ = filter_attributes(sound_data, 'features_recon')
+
         print(f"Loaded sound_data: {len(sound_data)}, metadata_keys: {metadata_keys}, pca: {pca}")
 
         # Prepare data for the combined set
@@ -185,6 +212,8 @@ def handle_request_latent(message):
         return {"type": "error", "content": f"Error loading audio: {e}"}
 
     try:
+        if timbre_gen_model is None or timbre_gen_model.control_model is None:
+            return {"type": "error", "content": "Model not ready. Please load a folder and retrain the VAE first."}
         # Debug: check if control_model is set
         print("[DEBUG] timbre_gen_model.control_model is None:", timbre_gen_model.control_model is None, "id:", id(timbre_gen_model.control_model))
         # Encode with generative model
