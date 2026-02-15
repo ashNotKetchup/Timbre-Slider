@@ -1,76 +1,42 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
+import os
 import random
-# from dummy_json import dummy_json
+import numpy as np
+import torch
+
 from timbre_VAE.load_audio import BufferManager
 from timbre_VAE.load_generative_model import Model, LatentRepresentation, ControlModel
-from mass_preprocess import mass_preprocess
-import numpy as np
-import json
+from timbre_VAE.logger import RequestLogger
 from timbre_VAE.vae_train import prepare_data, VAE, train_vae
-from timbre_VAE.features import batch_compute_features
+from timbre_VAE.features import batch_compute_features, get_features
 
 
-import torch
-# --- SETUP DEPENDENCIES/CLASSES –––
+# --- SETUP LIGHTWEIGHT DEPENDENCIES –––
+request_logger = RequestLogger()
 latent_representation = LatentRepresentation()
 audio_handler = BufferManager()
 
 
-# --- CONFIGURATION (match learn_subspace.py) ---
-# model_type = 'STABLE_AUDIO'
-model_type = 'RAVE'  # or 'STABLE_AUDIO', depending on the model you want to use
-model_name = 'percussion'  # or any other model name as needed
+# --- CONFIGURATION (defaults – nothing heavy happens here) ---
+model_type = 'RAVE'           # or 'STABLE_AUDIO'
+model_name = 'percussion'
 model_location = f'timbre_VAE/models/RAVE_models/generative_models/{model_name}.ts'
 vae_path = 'precomputed/control_models/Foley_STABLE_AUDIO_audio_commons_preprocessed_sound_data_EX_Noise_120_waterfall_creaks_vae.pt'
-# feature_type = 'audio_commons'
-# feature_type = 'raw_features'
-feature_type = 'pca'  # or 'raw_features', 'audio_commons', 'pca'
+feature_type = 'pca'          # or 'raw_features', 'audio_commons'
 sample_folder = 'sounds/Foley'
+
+# --- Mutable state (initialised lazily by handlers) ---
 feature_paths = None
 folder_path = None
 audio_path = None
 metadata_keys = None
-
-# Load generative model
-gen_model = Model(model_type=model_type, model_path=[model_location])
-
-# Get metadata keys using feature type (simulate learn_subspace.py logic)
-import os
-from timbre_VAE.features import get_features
-print(f'preprocessing files')
-sound_files = [f for f in os.listdir(sample_folder) if f.endswith(('.wav', '.aif', '.mp3', '.ogg'))]
-# PCA uses raw_features underneath
-compute_type = 'raw_features' if feature_type in ('pca', 'PCA') else feature_type
-sound_data, feature_keys, _ = get_features(sound_files, compute_type, model=gen_model, save_path=None, overwrite=False, root_folder=sample_folder)
-# For PCA, project features now so prepare_data can find the PCA keys
-if feature_type in ('pca', 'PCA'):
-    from timbre_VAE.features import pca_attributes
-    feature_keys, reduced_dicts, _ = pca_attributes(sound_data, 'features_recon')
-    for i, rd in enumerate(reduced_dicts):
-        sound_data[i]['features_recon'] = rd
-from timbre_VAE.vae_train import prepare_data, VAE, train_vae
-print(f'preparing data with feature keys: {feature_keys}')
-_, _, metadata_keys, input_dim, latent_dim = prepare_data(sound_data, metadata_keys=feature_keys)
-
-# Load with VAE
-# control_model = ControlModel(vae_path, input_dim=input_dim, latent_dim=latent_dim)
 timbre_gen_model = None
 
-# try:
-#     timbre_gen_model = Model(
-#         model_type=model_type,
-#         model_path=[model_location],
-#         control_vae_path=vae_path,
-#         control_vae_input_dim=input_dim,
-#         control_vae_latent_dim=latent_dim
-#     )
-#     print("Loaded timbre_gen_model successfully.")
-# except Exception as e:
-#     print(f"No suitable model available or failed to load: {e}")
-#     print("You need to retrain the model before use.")
-#     
-print(f'Loaded generative model and VAE with metadata keys: {metadata_keys}, latent dim: {latent_dim} and input dim: {input_dim}')
+# Load generative model eagerly — it's needed for almost every request
+print(f"[Startup] Loading generative model ({model_type}: {model_location}) …")
+gen_model = Model(model_type=model_type, model_path=[model_location])
+print("[Startup] Generative model loaded.")
 
 # --- NEW: Handler for loading a folder, computing features, and retraining VAE ---
 _last_loaded_features = {
@@ -90,6 +56,7 @@ def handle_request_load_folder(message):
     if not folder_path or not os.path.isdir(folder_path):
         return {"type": "error", "content": f"Invalid folder path: {folder_path}"}
     try:
+        from mass_preprocess import mass_preprocess
         # Compute features (or use precomputed)
         feature_paths = mass_preprocess(folder_path, 
                                         model_name=model_name, 
@@ -103,9 +70,8 @@ def handle_request_load_folder(message):
         _last_loaded_features = {
             'folder_path': folder_path,
             'feature_save_paths': feature_paths,
-            'sound_data': sound_data,
-            'feature_keys': feature_keys,
-            # 'pca': pca,
+            'sound_data': None,
+            'feature_keys': None,
             'last_sample_file': audio_path,
             'last_sample_dir': folder_path
         }
@@ -327,13 +293,26 @@ def handle_set_regularisation(message):
         return {"type": "error", "content": f"Unknown regularisation type: {reg_type}"}
 
 
+# --- Handler for saving / exporting logs ---
+def handle_save_logs(message):
+    """Open a save-file dialogue so the user can export the request/response log."""
+    print(f"[Logger] Save/export logs requested ({request_logger.count} entries).")
+    saved_path = request_logger.open_save_dialogue()
+    if saved_path:
+        return {"type": "save_logs_done", "content": f"Logs saved to {saved_path}"}
+    else:
+        return {"type": "save_logs_cancelled", "content": "Save dialog was cancelled or failed."}
+
+
 # --- Switch map/dictionary ---
 handlers = {
     "request_latent": handle_request_latent,
     "request_audio": handle_request_audio,
     "request_load_folder": handle_request_load_folder,
     "request_retrain_vae": handle_request_retrain_vae,
-    "set_regularisation": handle_set_regularisation
+    "set_regularisation": handle_set_regularisation,
+    "save_logs": handle_save_logs,
+    "export_logs": handle_save_logs,
 }
 
 
@@ -344,6 +323,7 @@ UDP Server Message Types:
     - request_audio: expects {"type": "request_audio", "content": <latent data dict>} to decode latent to audio.
     - request_load_folder: expects {"type": "request_load_folder", "content": <folder path>} to compute features for all audio in the folder and load them for retraining.
     - request_retrain_vae: expects {"type": "request_retrain_vae"} to retrain the VAE using the most recently loaded features.
+    - save_logs / export_logs: expects {"type": "save_logs"} or {"type": "export_logs"} to open a file-save dialog and export all logged requests/responses.
 """
 
 class SimpleHandler(BaseHTTPRequestHandler):
@@ -365,6 +345,9 @@ class SimpleHandler(BaseHTTPRequestHandler):
             print(f"Unknown message type: {msg_type}")
             reply = {"type": "error", "content": f"Unknown message type: {msg_type}"}
         
+        # --- Log request + response ---
+        request_logger.log(request=message, response=reply)
+
         reply_bytes = json.dumps(reply).encode()
         try:
             self.send_response(200)

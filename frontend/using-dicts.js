@@ -57,6 +57,7 @@
  * - "request_audio": Decodes latent representation to audio.
  * - "request_load_folder": Loads a folder and computes features for retraining.
  * - "request_retrain_vae": Retrains the VAE using loaded features.
+ * - "save_logs" / "export_logs": Opens a save-file dialog on the server to export all logged requests/responses.
  */
 const maxApi = require("max-api");
 const DICT_ID = "representations.dict";
@@ -97,7 +98,7 @@ let initialDict = {
 //		* Async Functions on MDN: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/async_function
 
 // form for sending messages to python server and receiving replies
-const send = async (message, timeoutMs = 300000) => {	
+const sendToServer = async (message, timeoutMs = 300000) => {	
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), timeoutMs);
 	try {
@@ -135,7 +136,7 @@ maxApi.addHandlers({
 				content: selected
 			};
 			try {
-				const reply = await send(message);
+				const reply = await sendToServer(message);
 				if (reply && reply.type === "set_regularisation_done") {
 					await maxApi.outlet(`Regularisation set to: ${selected}`);
 				} else {
@@ -171,18 +172,16 @@ maxApi.addHandlers({
 	load: async (filepath) => {
 		// Node -> Python POST request
 
-		message = {
+		const message = {
 		    "type": "request_latent", 
 		    "content": filepath
-		}
+		};
 		
-		reply = await send(message);
-		// reply = {"type": "latent", "content": {"latent_vector": [0.1, 0.2, 0.3, 0.4]}};
-		// data = reply["content"];
+		const reply = await sendToServer(message);
 
 		if (reply["type"] == 'latent' ){
 			console.log("Received latent representation from Python server: ", reply["content"]);
-			dict = await maxApi.setDict(DICT_ID, reply["content"]);
+			const dict = await maxApi.setDict(DICT_ID, reply["content"]);
 			// for debugging:
 			 await maxApi.outlet(dict);
 
@@ -195,7 +194,7 @@ maxApi.addHandlers({
 			"type": "request_load_folder",
 			"content": folderPath
 		};
-		const reply = await send(message);
+		const reply = await sendToServer(message);
 		if (reply["type"] === "load_folder_done") {
 			console.log("Loaded folder and computed features:", reply["content"]);
 			await maxApi.outlet("Folder loaded");
@@ -208,7 +207,7 @@ maxApi.addHandlers({
 		const message = {
 			"type": "request_retrain_vae"
 		};
-		const reply = await send(message);
+		const reply = await sendToServer(message);
 		if (reply["type"] === "retrain_done") {
 			console.log("VAE retraining complete:", reply["content"]);
 			// If the reply includes latent data, update the dict
@@ -236,19 +235,41 @@ maxApi.addHandlers({
 			json = '{}';
 		}
 
-		const prefix = 'request_audio';
 		const message = {
-			"type": prefix,
+			"type": "request_audio",
 			"content": json
-		}
+		};
 
-		reply = await send(message);
-
+		const reply = await sendToServer(message);
 
 		// Feedback via Max outlet
-		const new_dict = JSON.parse(json)
+		const new_dict = JSON.parse(json);
 		await maxApi.outlet(new_dict);
 	},
+	save_logs: async () => {
+		console.log("Requesting server to save/export logs...");
+		const message = { "type": "save_logs", "content": "" };
+		try {
+			const reply = await sendToServer(message);
+			if (reply["type"] === "save_logs_done") {
+				console.log("Logs saved:", reply["content"]);
+				await maxApi.outlet("Logs saved");
+			} else if (reply["type"] === "save_logs_cancelled") {
+				console.log("Log save cancelled by user.");
+				await maxApi.outlet("Log save cancelled");
+			} else {
+				console.error("Unexpected reply for save_logs:", reply);
+				await maxApi.outlet("Log save failed");
+			}
+		} catch (err) {
+			console.error("Error requesting log save:", err);
+			await maxApi.outlet("Error saving logs");
+		}
+	},
+		export_logs: async (...args) => {
+			// Alias for save_logs
+			return maxApi.handlers.save_logs(...args);
+		},
 }
 );
 
