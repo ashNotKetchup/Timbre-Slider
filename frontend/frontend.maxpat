@@ -10,7 +10,7 @@
 		}
 ,
 		"classnamespace" : "box",
-		"rect" : [ 34.0, 100.0, 1243.0, 648.0 ],
+		"rect" : [ 34.0, 100.0, 1169.0, 787.0 ],
 		"bglocked" : 0,
 		"openinpresentation" : 0,
 		"default_fontsize" : 12.0,
@@ -39,6 +39,18 @@
 		"subpatcher_template" : "",
 		"assistshowspatchername" : 0,
 		"boxes" : [ 			{
+				"box" : 				{
+					"id" : "obj-82",
+					"maxclass" : "message",
+					"numinlets" : 2,
+					"numoutlets" : 1,
+					"outlettype" : [ "" ],
+					"patching_rect" : [ 2339.0, 2462.0, 81.0, 22.0 ],
+					"text" : "export_sound"
+				}
+
+			}
+, 			{
 				"box" : 				{
 					"bgcolor" : [ 0.988235294117647, 0.584313725490196, 0.388235294117647, 1.0 ],
 					"bgcolor2" : [ 0.988235294117647, 0.647058823529412, 0.47843137254902, 1.0 ],
@@ -138,7 +150,7 @@
 					"fontname" : "Helvetica Bold",
 					"fontsize" : 9.0,
 					"id" : "obj-33",
-					"linecount" : 2,
+					"linecount" : 3,
 					"maxclass" : "textedit",
 					"numinlets" : 1,
 					"numoutlets" : 4,
@@ -149,7 +161,7 @@
 					"presentation_linecount" : 2,
 					"presentation_rect" : [ 1084.0, 290.5, 69.0, 26.0 ],
 					"rounded" : 24.0,
-					"text" : "\"Spectral Centroid\"",
+					"text" : "\"Spectral Bandwidth\"",
 					"textcolor" : [ 0.993329346179962, 0.586715519428253, 0.384809076786041, 1.0 ],
 					"textjustification" : 1
 				}
@@ -170,10 +182,10 @@
 					"parameter_enable" : 0,
 					"patching_rect" : [ 420.959738940000534, 1922.0, 57.0, 33.0 ],
 					"presentation" : 1,
-					"presentation_linecount" : 3,
+					"presentation_linecount" : 2,
 					"presentation_rect" : [ 1007.0, 290.5, 61.0, 33.0 ],
 					"rounded" : 24.0,
-					"text" : "\"Spectral Bandwidth\"",
+					"text" : "\"Spectral Centroid\"",
 					"textcolor" : [ 0.993329346179962, 0.586715519428253, 0.384809076786041, 1.0 ],
 					"textjustification" : 1
 				}
@@ -186,7 +198,6 @@
 					"fontname" : "Helvetica Bold",
 					"fontsize" : 9.0,
 					"id" : "obj-14",
-					"linecount" : 2,
 					"maxclass" : "textedit",
 					"numinlets" : 1,
 					"numoutlets" : 4,
@@ -194,10 +205,9 @@
 					"parameter_enable" : 0,
 					"patching_rect" : [ 360.959738940000534, 1922.0, 61.0, 24.0 ],
 					"presentation" : 1,
-					"presentation_linecount" : 2,
 					"presentation_rect" : [ 923.0, 291.0, 71.0, 25.0 ],
 					"rounded" : 24.0,
-					"text" : "\"Spectral Rolloff\"",
+					"text" : "Pitch",
 					"textcolor" : [ 0.993329346179962, 0.586715519428253, 0.384809076786041, 1.0 ],
 					"textjustification" : 1
 				}
@@ -210,6 +220,7 @@
 					"fontname" : "Helvetica Bold",
 					"fontsize" : 9.0,
 					"id" : "obj-13",
+					"linecount" : 2,
 					"maxclass" : "textedit",
 					"numinlets" : 1,
 					"numoutlets" : 4,
@@ -217,9 +228,10 @@
 					"parameter_enable" : 0,
 					"patching_rect" : [ 298.959738940000534, 1922.0, 58.0, 18.34862232208252 ],
 					"presentation" : 1,
+					"presentation_linecount" : 2,
 					"presentation_rect" : [ 841.0, 291.0, 67.0, 25.0 ],
 					"rounded" : 24.0,
-					"text" : "Pitch",
+					"text" : "\"Spectral Rolloff\"",
 					"textcolor" : [ 0.993329346179962, 0.586715519428253, 0.384809076786041, 1.0 ],
 					"textjustification" : 1
 				}
@@ -348,7 +360,7 @@
 					"bgfillcolor_proportion" : 0.39,
 					"bgfillcolor_type" : "gradient",
 					"id" : "obj-211",
-					"items" : [ "Un-Regularised", ",", "Raw", "Features", ",", "Semantic" ],
+					"items" : [ "PCA", ",", "Raw", "Features", ",", "Semantic" ],
 					"maxclass" : "umenu",
 					"numinlets" : 1,
 					"numoutlets" : 3,
@@ -656,7 +668,7 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
 					"patching_rect" : [ 1493.0, 183.0, 544.0, 22.0 ],
-					"text" : "/Users/ash/Documents/GitHub/Timbre-Slider/sounds/umru/UMRU_110_drum_fill_laser_sub.wav"
+					"text" : "/Users/ash/Documents/GitHub/Timbre-Slider/sounds/umru/UMRU_135_drum_fill_club_warfare.wav"
 				}
 
 			}
@@ -667,7 +679,7 @@
 					"numinlets" : 1,
 					"numoutlets" : 1,
 					"outlettype" : [ "bang" ],
-					"patching_rect" : [ 2280.848283290863037, 2445.0, 22.0, 22.0 ],
+					"patching_rect" : [ 2280.848283290863037, 2436.0, 22.0, 22.0 ],
 					"text" : "t b"
 				}
 
@@ -1224,7 +1236,7 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
 					"patching_rect" : [ 88.505745649337769, 2090.269435882568359, 50.0, 35.0 ],
-					"text" : "0. 0. 0. 0."
+					"text" : "0. 0. 3.75 0."
 				}
 
 			}
@@ -1529,12 +1541,13 @@
 					"fontsize" : 30.0,
 					"gradient" : 1,
 					"id" : "obj-194",
+					"linecount" : 2,
 					"maxclass" : "message",
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 0.545449733734131, 1098.590811252593994, 231.0, 43.0 ],
-					"text" : "Pitch",
+					"patching_rect" : [ 0.545449733734131, 1098.590811252593994, 231.0, 78.0 ],
+					"text" : "\"Spectral Bandwidth\"",
 					"textcolor" : [ 0.988235294117647, 0.584313725490196, 0.388235294117647, 1.0 ]
 				}
 
@@ -1596,7 +1609,7 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
 					"patching_rect" : [ 737.000022888183594, 1251.138948857784271, 152.0, 35.0 ],
-					"text" : "metadata_keys array u616002085"
+					"text" : "metadata_keys array u236002570"
 				}
 
 			}
@@ -2028,7 +2041,7 @@
 					"patching_rect" : [ 604.000018000602722, 1329.750039458274841, 240.0, 109.0 ],
 					"presentation" : 1,
 					"presentation_rect" : [ 836.0, 455.0, 375.0, 78.0 ],
-					"size" : 5,
+					"size" : 12,
 					"slidercolor" : [ 0.989521324634552, 0.585809946060181, 0.387364208698273, 1.0 ],
 					"thickness" : 12
 				}
@@ -2543,7 +2556,7 @@
 			}
 , 			{
 				"box" : 				{
-					"addpoints_with_curve" : [ 0.0, 0.384615384615385, 0, 0.0, 2.0, 1.0, 0, 0.0, 4.0, 0.538461538461539, 0, 0.0, 6.0, 1.0, 0, 0.0, 8.0, -0.378466218709946, 0, 0.0 ],
+					"addpoints_with_curve" : [ 0.0, -0.740162134170532, 0, 0.0, 0.833333333333333, 0.164702221751213, 0, 0.0, 1.666666666666667, -0.643803834915161, 0, 0.0, 2.5, -0.502863109111786, 0, 0.0, 3.333333333333333, -0.006432291120291, 0, 0.0, 4.166666666666666, -0.292416423559189, 0, 0.0, 4.999999999999999, -0.307855725288391, 0, 0.0, 5.833333333333332, -0.392766922712326, 0, 0.0, 6.666666666666666, -0.339929282665253, 0, 0.0, 7.499999999999999, -0.010830379091203, 0, 0.0, 8.333333333333332, 0.110700748860836, 0, 0.0, 9.166666666666666, 0.182888507843018, 0, 0.0 ],
 					"bgcolor" : [ 0.2, 0.2, 0.2, 0.0 ],
 					"classic_curve" : 1,
 					"clicksustain" : 0,
@@ -3551,8 +3564,6 @@
 					"saved_object_attributes" : 					{
 						"autostart" : 0,
 						"defer" : 0,
-						"node_bin_path" : "",
-						"npm_bin_path" : "",
 						"watch" : 0
 					}
 ,
@@ -3768,7 +3779,7 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
 					"patching_rect" : [ 728.000021696090698, 1640.000048875808716, 137.0, 35.0 ],
-					"text" : "vector::0::label string u446002087"
+					"text" : "vector::0::label string u962002572"
 				}
 
 			}
@@ -3790,30 +3801,30 @@
 						"vector" : 						{
 							"0" : 							{
 								"label" : "Dimension 1",
-								"data" : [ 0.384615384615385, 1, 0.538461538461539, 1, -0.378466218709946 ]
+								"data" : [ -0.740162134170532, 0.164702221751213, -0.643803834915161, -0.502863109111786, -0.006432291120291, -0.292416423559189, -0.307855725288391, -0.392766922712326, -0.339929282665253, -0.010830379091203, 0.110700748860836, 0.182888507843018 ]
 							}
 ,
 							"1" : 							{
 								"label" : "Dimension 2",
-								"data" : [ -0.305104434490204, 0.461842089891434, -0.310735523700714, 0.151244685053825, -0.118670508265495 ]
+								"data" : [ -0.606427133083344, -0.806616246700287, -0.022669931873679, 0.526544153690338, 0.301129698753357, -0.116040602326393, -0.266272515058517, -0.301407992839813, -0.531932532787323, -0.740271925926208, -0.807593643665314, -0.857091128826141 ]
 							}
 ,
 							"2" : 							{
 								"label" : "Dimension 3",
-								"data" : [ 0.605655789375305, -0.350963532924652, 0.318886935710907, 0.50319117307663, 0.006324549671263 ]
+								"data" : [ 0.044133346527815, -0.189101502299309, -0.364959925413132, -0.233812734484673, -0.400929152965546, -0.329979866743088, -0.016189003363252, 0.132306724786758, 0.325055629014969, 0.071178786456585, -0.300602912902832, -0.227523326873779 ]
 							}
 ,
 							"3" : 							{
 								"label" : "Dimension 4",
-								"data" : [ -0.751811146736145, 0.299818724393845, -0.013265151530504, 0.529097139835358, 0.349255561828613 ]
+								"data" : [ -0.617104649543762, 0.152021452784538, -0.813545763492584, -0.700833320617676, -0.723444104194641, -0.651793956756592, -0.305818378925323, -0.262832671403885, 0.040239635854959, 0.150781154632568, 0.195634335279465, 0.312126517295837 ]
 							}
 
 						}
 ,
 						"text" : "I havent implemented text embeddings yet!",
-						"bias" : [ 0, 0, 0, 0 ],
+						"bias" : [ 0, 0, 3.75, 0 ],
 						"scale" : [ 1, 1, 1, 1 ],
-						"metadata_keys" : [ "Pitch", "Spectral Rolloff", "Spectral Bandwidth", "Spectral Centroid" ]
+						"metadata_keys" : [ "Spectral Rolloff", "Pitch", "Spectral Centroid", "Spectral Bandwidth" ]
 					}
 ,
 					"id" : "obj-44",
@@ -3907,8 +3918,6 @@
 					"saved_object_attributes" : 					{
 						"autostart" : 0,
 						"defer" : 0,
-						"node_bin_path" : "",
-						"npm_bin_path" : "",
 						"watch" : 0
 					}
 ,
@@ -4192,7 +4201,7 @@
 					"fontname" : "Helvetica Neue",
 					"fontsize" : 15.0,
 					"id" : "obj-34",
-					"items" : [ "Pitch", ",", "Spectral Rolloff", ",", "Spectral Bandwidth", ",", "Spectral Centroid" ],
+					"items" : [ "Spectral Rolloff", ",", "Pitch", ",", "Spectral Centroid", ",", "Spectral Bandwidth" ],
 					"maxclass" : "umenu",
 					"numinlets" : 1,
 					"numoutlets" : 3,
@@ -5175,6 +5184,15 @@
 , 			{
 				"patchline" : 				{
 					"destination" : [ "obj-197", 0 ],
+					"order" : 1,
+					"source" : [ "obj-209", 0 ]
+				}
+
+			}
+, 			{
+				"patchline" : 				{
+					"destination" : [ "obj-82", 0 ],
+					"order" : 0,
 					"source" : [ "obj-209", 0 ]
 				}
 
@@ -5846,6 +5864,13 @@
 				"patchline" : 				{
 					"destination" : [ "obj-84", 0 ],
 					"source" : [ "obj-81", 0 ]
+				}
+
+			}
+, 			{
+				"patchline" : 				{
+					"destination" : [ "obj-31", 0 ],
+					"source" : [ "obj-82", 0 ]
 				}
 
 			}

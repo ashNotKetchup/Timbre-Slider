@@ -57,6 +57,7 @@
  * - "request_audio": Decodes latent representation to audio.
  * - "request_load_folder": Loads a folder and computes features for retraining.
  * - "request_retrain_vae": Retrains the VAE using loaded features.
+ * - "export_sound": Sends an export-sound event to the server for logging only (no-op).
  * - "save_logs" / "export_logs": Opens a save-file dialog on the server to export all logged requests/responses.
  */
 const maxApi = require("max-api");
@@ -269,6 +270,18 @@ maxApi.addHandlers({
 		export_logs: async (...args) => {
 			// Alias for save_logs
 			return maxApi.handlers.save_logs(...args);
+		},
+		export_sound: async (...args) => {
+			// Send an export_sound event to the server (logging only, no-op)
+			const message = { "type": "export_sound", "content": args.length ? args[0] : "" };
+			try {
+				const reply = await sendToServer(message);
+				console.log("export_sound logged:", reply);
+				await maxApi.outlet("Export sound logged");
+			} catch (err) {
+				console.error("Error sending export_sound:", err);
+				await maxApi.outlet("Error logging export sound");
+			}
 		},
 }
 );

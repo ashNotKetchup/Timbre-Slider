@@ -294,6 +294,13 @@ def handle_set_regularisation(message):
         return {"type": "error", "content": f"Unknown regularisation type: {reg_type}"}
 
 
+# --- Handler for export_sound (logging only, no-op) ---
+def handle_export_sound(message):
+    """Log the export-sound request and return an acknowledgement. No side-effects."""
+    print(f"[export_sound] Logged export sound request: {message.get('content', '')}")
+    return {"type": "export_sound_logged", "content": "Export sound event logged."}
+
+
 # --- Handler for saving / exporting logs ---
 def handle_save_logs(message):
     """Open a save-file dialogue so the user can export the request/response log."""
@@ -312,6 +319,7 @@ handlers = {
     "request_load_folder": handle_request_load_folder,
     "request_retrain_vae": handle_request_retrain_vae,
     "set_regularisation": handle_set_regularisation,
+    "export_sound": handle_export_sound,
     "save_logs": handle_save_logs,
     "export_logs": handle_save_logs,
 }
@@ -324,6 +332,7 @@ UDP Server Message Types:
     - request_audio: expects {"type": "request_audio", "content": <latent data dict>} to decode latent to audio.
     - request_load_folder: expects {"type": "request_load_folder", "content": <folder path>} to compute features for all audio in the folder and load them for retraining.
     - request_retrain_vae: expects {"type": "request_retrain_vae"} to retrain the VAE using the most recently loaded features.
+    - export_sound: expects {"type": "export_sound", "content": <any>} to log an export-sound event (no-op, logging only).
     - save_logs / export_logs: expects {"type": "save_logs"} or {"type": "export_logs"} to open a file-save dialog and export all logged requests/responses.
 """
 
