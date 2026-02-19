@@ -1,0 +1,350 @@
+[
+  {
+    "timestamp": "2026-02-18T17:47:33.960874",
+    "request": {
+      "type": "request_load_folder",
+      "content": "/Users/ash/Documents/GitHub/Timbre-Slider/sounds/umru/"
+    },
+    "response": {
+      "type": "load_folder",
+      "content": "Features computed and loaded for /Users/ash/Documents/GitHub/Timbre-Slider/sounds/umru/"
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:50:27.110617",
+    "request": {
+      "type": "request_latent",
+      "content": "/Users/ash/Documents/GitHub/Timbre-Slider/sounds/umru/UMRU_120_drum_fill_break_chopper.wav"
+    },
+    "response": {
+      "type": "error",
+      "content": "Model not ready. Please load a folder and retrain the VAE first."
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:50:45.910437",
+    "request": {
+      "type": "set_regularisation",
+      "content": "audio_commons"
+    },
+    "response": {
+      "type": "set_regularisation_done",
+      "content": "Set feature_type to audio_commons and reloaded folder: /Users/ash/Documents/GitHub/Timbre-Slider/sounds/umru/."
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:51:29.192258",
+    "request": {
+      "type": "request_retrain_vae"
+    },
+    "response": {
+      "type": "retrain_done",
+      "content": "VAE retrained for /Users/ash/Documents/GitHub/Timbre-Slider/sounds/umru/ (sample added: /Users/ash/Documents/GitHub/Timbre-Slider/sounds/umru/UMRU_120_drum_fill_break_chopper.wav)",
+      "latent": {
+        "vector": {
+          "0": {
+            "label": "Dimension 1",
+            "data": [
+              -0.8158840537071228,
+              -0.43795743584632874,
+              -0.21989712119102478,
+              -0.39672333002090454,
+              -0.3994501233100891
+            ]
+          },
+          "1": {
+            "label": "Dimension 2",
+            "data": [
+              -1.1695319414138794,
+              -0.49371445178985596,
+              -0.718037486076355,
+              -0.5135521292686462,
+              -0.5823796391487122
+            ]
+          },
+          "2": {
+            "label": "Dimension 3",
+            "data": [
+              -1.116007685661316,
+              -0.4091981053352356,
+              -0.7713437080383301,
+              -0.5425388813018799,
+              -0.2240239679813385
+            ]
+          },
+          "3": {
+            "label": "Dimension 4",
+            "data": [
+              1.0523056983947754,
+              -0.5030972957611084,
+              -0.3112749755382538,
+              -0.19768358767032623,
+              0.3733202815055847
+            ]
+          }
+        },
+        "text": "I havent implemented text embeddings yet!",
+        "bias": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1,
+          1
+        ],
+        "metadata_keys": [
+          "Brightness",
+          "Boominess",
+          "Warmth",
+          "Sharpness"
+        ]
+      }
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:51:31.044367",
+    "request": {
+      "type": "request_audio",
+      "content": "{\"vector\":{\"0\":{\"label\":\"Dimension 1\",\"data\":[-0.815884053707123,-0.437957435846329,-0.219897121191025,-0.396723330020905,-0.399450123310089]},\"1\":{\"label\":\"Dimension 2\",\"data\":[-1.169531941413879,-0.493714451789856,-0.718037486076355,-0.513552129268646,-0.582379639148712]},\"2\":{\"label\":\"Dimension 3\",\"data\":[-1.116007685661316,-0.409198105335236,-0.77134370803833,-0.54253888130188,-0.224023967981339]},\"3\":{\"label\":\"Dimension 4\",\"data\":[1.052305698394775,-0.503097295761108,-0.311274975538254,-0.197683587670326,0.373320281505585]}},\"text\":\"I havent implemented text embeddings yet!\",\"bias\":[0,0,0,0],\"scale\":[1,1,1,1],\"metadata_keys\":[\"Brightness\",\"Boominess\",\"Warmth\",\"Sharpness\"]}"
+    },
+    "response": {
+      "type": "decoded",
+      "content": "Decoded successfully"
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:52:11.582138",
+    "request": {
+      "type": "request_audio",
+      "content": "{\"vector\":{\"0\":{\"label\":\"Dimension 1\",\"data\":[-0.815884053707123,-0.437957435846329,-0.219897121191025,-0.396723330020905,-0.399450123310089]},\"1\":{\"label\":\"Dimension 2\",\"data\":[-1.169531941413879,-0.493714451789856,-0.718037486076355,-0.513552129268646,-0.582379639148712]},\"2\":{\"label\":\"Dimension 3\",\"data\":[-1.116007685661316,-0.409198105335236,-0.77134370803833,-0.54253888130188,-0.224023967981339]},\"3\":{\"label\":\"Dimension 4\",\"data\":[1.052305698394775,-0.503097295761108,-0.311274975538254,-0.197683587670326,0.373320281505585]}},\"text\":\"I havent implemented text embeddings yet!\",\"bias\":[-0.3125,0,0,0],\"scale\":[1,1,1,1],\"metadata_keys\":[\"Brightness\",\"Boominess\",\"Warmth\",\"Sharpness\"]}"
+    },
+    "response": {
+      "type": "decoded",
+      "content": "Decoded successfully"
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:52:12.613215",
+    "request": {
+      "type": "request_audio",
+      "content": "{\"vector\":{\"0\":{\"label\":\"Dimension 1\",\"data\":[-0.815884053707123,-0.437957435846329,-0.219897121191025,-0.396723330020905,-0.399450123310089]},\"1\":{\"label\":\"Dimension 2\",\"data\":[-1.169531941413879,-0.493714451789856,-0.718037486076355,-0.513552129268646,-0.582379639148712]},\"2\":{\"label\":\"Dimension 3\",\"data\":[-1.116007685661316,-0.409198105335236,-0.77134370803833,-0.54253888130188,-0.224023967981339]},\"3\":{\"label\":\"Dimension 4\",\"data\":[1.052305698394775,-0.503097295761108,-0.311274975538254,-0.197683587670326,0.373320281505585]}},\"text\":\"I havent implemented text embeddings yet!\",\"bias\":[4.270833333333334,0,0,0],\"scale\":[1,1,1,1],\"metadata_keys\":[\"Brightness\",\"Boominess\",\"Warmth\",\"Sharpness\"]}"
+    },
+    "response": {
+      "type": "decoded",
+      "content": "Decoded successfully"
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:52:17.153009",
+    "request": {
+      "type": "request_audio",
+      "content": "{\"vector\":{\"0\":{\"label\":\"Dimension 1\",\"data\":[-0.815884053707123,-0.437957435846329,-0.219897121191025,-0.396723330020905,-0.399450123310089]},\"1\":{\"label\":\"Dimension 2\",\"data\":[-1.169531941413879,-0.493714451789856,-0.718037486076355,-0.513552129268646,-0.582379639148712]},\"2\":{\"label\":\"Dimension 3\",\"data\":[-1.116007685661316,-0.409198105335236,-0.77134370803833,-0.54253888130188,-0.224023967981339]},\"3\":{\"label\":\"Dimension 4\",\"data\":[1.052305698394775,-0.503097295761108,-0.311274975538254,-0.197683587670326,0.373320281505585]}},\"text\":\"I havent implemented text embeddings yet!\",\"bias\":[2.708333333333333,0,0,0],\"scale\":[1,1,1,1],\"metadata_keys\":[\"Brightness\",\"Boominess\",\"Warmth\",\"Sharpness\"]}"
+    },
+    "response": {
+      "type": "decoded",
+      "content": "Decoded successfully"
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:52:18.322545",
+    "request": {
+      "type": "request_audio",
+      "content": "{\"vector\":{\"0\":{\"label\":\"Dimension 1\",\"data\":[-0.815884053707123,-0.437957435846329,-0.219897121191025,-0.396723330020905,-0.399450123310089]},\"1\":{\"label\":\"Dimension 2\",\"data\":[-1.169531941413879,-0.493714451789856,-0.718037486076355,-0.513552129268646,-0.582379639148712]},\"2\":{\"label\":\"Dimension 3\",\"data\":[-1.116007685661316,-0.409198105335236,-0.77134370803833,-0.54253888130188,-0.224023967981339]},\"3\":{\"label\":\"Dimension 4\",\"data\":[1.052305698394775,-0.503097295761108,-0.311274975538254,-0.197683587670326,0.373320281505585]}},\"text\":\"I havent implemented text embeddings yet!\",\"bias\":[2.708333333333333,0,0,0],\"scale\":[1,1,1,1],\"metadata_keys\":[\"Brightness\",\"Boominess\",\"Warmth\",\"Sharpness\"]}"
+    },
+    "response": {
+      "type": "decoded",
+      "content": "Decoded successfully"
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:52:29.430725",
+    "request": {
+      "type": "request_audio",
+      "content": "{\"vector\":{\"0\":{\"label\":\"Dimension 1\",\"data\":[-0.815884053707123,-0.437957435846329,-0.219897121191025,-0.396723330020905,-0.399450123310089]},\"1\":{\"label\":\"Dimension 2\",\"data\":[-1.169531941413879,-0.493714451789856,-0.718037486076355,-0.513552129268646,-0.582379639148712]},\"2\":{\"label\":\"Dimension 3\",\"data\":[-1.116007685661316,-0.409198105335236,-0.77134370803833,-0.54253888130188,-0.224023967981339]},\"3\":{\"label\":\"Dimension 4\",\"data\":[1.052305698394775,-0.503097295761108,-0.311274975538254,-0.197683587670326,0.373320281505585]}},\"text\":\"I havent implemented text embeddings yet!\",\"bias\":[0.625,0,0,0],\"scale\":[1,1,1,1],\"metadata_keys\":[\"Brightness\",\"Boominess\",\"Warmth\",\"Sharpness\"]}"
+    },
+    "response": {
+      "type": "decoded",
+      "content": "Decoded successfully"
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:52:35.384980",
+    "request": {
+      "type": "request_audio",
+      "content": "{\"vector\":{\"0\":{\"label\":\"Dimension 1\",\"data\":[-0.815884053707123,-0.437957435846329,-0.219897121191025,-0.396723330020905,-0.399450123310089]},\"1\":{\"label\":\"Dimension 2\",\"data\":[-1.169531941413879,-0.493714451789856,-0.718037486076355,-0.513552129268646,-0.582379639148712]},\"2\":{\"label\":\"Dimension 3\",\"data\":[-1.116007685661316,-0.409198105335236,-0.77134370803833,-0.54253888130188,-0.224023967981339]},\"3\":{\"label\":\"Dimension 4\",\"data\":[1.052305698394775,-0.503097295761108,-0.311274975538254,-0.197683587670326,0.373320281505585]}},\"text\":\"I havent implemented text embeddings yet!\",\"bias\":[0.625,3.125,0,0],\"scale\":[1,1,1,1],\"metadata_keys\":[\"Brightness\",\"Boominess\",\"Warmth\",\"Sharpness\"]}"
+    },
+    "response": {
+      "type": "decoded",
+      "content": "Decoded successfully"
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:52:36.375538",
+    "request": {
+      "type": "request_audio",
+      "content": "{\"vector\":{\"0\":{\"label\":\"Dimension 1\",\"data\":[-0.815884053707123,-0.437957435846329,-0.219897121191025,-0.396723330020905,-0.399450123310089]},\"1\":{\"label\":\"Dimension 2\",\"data\":[-1.169531941413879,-0.493714451789856,-0.718037486076355,-0.513552129268646,-0.582379639148712]},\"2\":{\"label\":\"Dimension 3\",\"data\":[-1.116007685661316,-0.409198105335236,-0.77134370803833,-0.54253888130188,-0.224023967981339]},\"3\":{\"label\":\"Dimension 4\",\"data\":[1.052305698394775,-0.503097295761108,-0.311274975538254,-0.197683587670326,0.373320281505585]}},\"text\":\"I havent implemented text embeddings yet!\",\"bias\":[0.625,2.8125,0,0],\"scale\":[1,1,1,1],\"metadata_keys\":[\"Brightness\",\"Boominess\",\"Warmth\",\"Sharpness\"]}"
+    },
+    "response": {
+      "type": "decoded",
+      "content": "Decoded successfully"
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:52:43.412199",
+    "request": {
+      "type": "request_audio",
+      "content": "{\"vector\":{\"0\":{\"label\":\"Dimension 1\",\"data\":[-0.815884053707123,-0.437957435846329,-0.219897121191025,-0.396723330020905,-0.399450123310089]},\"1\":{\"label\":\"Dimension 2\",\"data\":[-1.169531941413879,-0.493714451789856,-0.718037486076355,-0.513552129268646,-0.582379639148712]},\"2\":{\"label\":\"Dimension 3\",\"data\":[-1.116007685661316,-0.409198105335236,-0.77134370803833,-0.54253888130188,-0.224023967981339]},\"3\":{\"label\":\"Dimension 4\",\"data\":[1.052305698394775,-0.503097295761108,-0.311274975538254,-0.197683587670326,0.373320281505585]}},\"text\":\"I havent implemented text embeddings yet!\",\"bias\":[0.625,1.354166666666667,0,0],\"scale\":[1,1,1,1],\"metadata_keys\":[\"Brightness\",\"Boominess\",\"Warmth\",\"Sharpness\"]}"
+    },
+    "response": {
+      "type": "decoded",
+      "content": "Decoded successfully"
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:53:03.159973",
+    "request": {
+      "type": "request_audio",
+      "content": "{\"vector\":{\"0\":{\"label\":\"Dimension 1\",\"data\":[-0.815884053707123,-0.437957435846329,-0.219897121191025,-0.396723330020905,-0.399450123310089]},\"1\":{\"label\":\"Dimension 2\",\"data\":[-1,-0.493714451789856,-0.718037486076355,-0.513552129268646,-0.582379639148712]},\"2\":{\"label\":\"Dimension 3\",\"data\":[-1.116007685661316,-0.409198105335236,-0.77134370803833,-0.54253888130188,-0.224023967981339]},\"3\":{\"label\":\"Dimension 4\",\"data\":[1.052305698394775,-0.503097295761108,-0.311274975538254,-0.197683587670326,0.373320281505585]}},\"text\":\"I havent implemented text embeddings yet!\",\"bias\":[0.625,1.354166666666667,0,0],\"scale\":[1,1,1,1],\"metadata_keys\":[\"Brightness\",\"Boominess\",\"Warmth\",\"Sharpness\"]}"
+    },
+    "response": {
+      "type": "decoded",
+      "content": "Decoded successfully"
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:53:08.610190",
+    "request": {
+      "type": "request_audio",
+      "content": "{\"vector\":{\"0\":{\"label\":\"Dimension 1\",\"data\":[-0.815884053707123,-0.437957435846329,-0.219897121191025,-0.396723330020905,-0.399450123310089]},\"1\":{\"label\":\"Dimension 2\",\"data\":[-0.333333333333333,-0.493714451789856,-0.718037486076355,-0.513552129268646,-0.582379639148712]},\"2\":{\"label\":\"Dimension 3\",\"data\":[-1.116007685661316,-0.409198105335236,-0.77134370803833,-0.54253888130188,-0.224023967981339]},\"3\":{\"label\":\"Dimension 4\",\"data\":[1.052305698394775,-0.503097295761108,-0.311274975538254,-0.197683587670326,0.373320281505585]}},\"text\":\"I havent implemented text embeddings yet!\",\"bias\":[0.625,1.354166666666667,0,0],\"scale\":[1,1,1,1],\"metadata_keys\":[\"Brightness\",\"Boominess\",\"Warmth\",\"Sharpness\"]}"
+    },
+    "response": {
+      "type": "decoded",
+      "content": "Decoded successfully"
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:53:10.343113",
+    "request": {
+      "type": "request_audio",
+      "content": "{\"vector\":{\"0\":{\"label\":\"Dimension 1\",\"data\":[-0.815884053707123,-0.437957435846329,-0.219897121191025,-0.396723330020905,-0.399450123310089]},\"1\":{\"label\":\"Dimension 2\",\"data\":[0.435897435897436,0.384615384615385,-0.718037486076355,-0.513552129268646,-0.582379639148712]},\"2\":{\"label\":\"Dimension 3\",\"data\":[-1.116007685661316,-0.409198105335236,-0.77134370803833,-0.54253888130188,-0.224023967981339]},\"3\":{\"label\":\"Dimension 4\",\"data\":[1.052305698394775,-0.503097295761108,-0.311274975538254,-0.197683587670326,0.373320281505585]}},\"text\":\"I havent implemented text embeddings yet!\",\"bias\":[0.625,1.354166666666667,0,0],\"scale\":[1,1,1,1],\"metadata_keys\":[\"Brightness\",\"Boominess\",\"Warmth\",\"Sharpness\"]}"
+    },
+    "response": {
+      "type": "decoded",
+      "content": "Decoded successfully"
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:53:11.943132",
+    "request": {
+      "type": "request_audio",
+      "content": "{\"vector\":{\"0\":{\"label\":\"Dimension 1\",\"data\":[-0.815884053707123,-0.437957435846329,-0.219897121191025,-0.396723330020905,-0.399450123310089]},\"1\":{\"label\":\"Dimension 2\",\"data\":[0.435897435897436,0.384615384615385,-0.718037486076355,-0.513552129268646,-0.582379639148712]},\"2\":{\"label\":\"Dimension 3\",\"data\":[-1.116007685661316,-0.409198105335236,-0.77134370803833,-0.54253888130188,-0.224023967981339]},\"3\":{\"label\":\"Dimension 4\",\"data\":[1.052305698394775,-0.503097295761108,-0.311274975538254,-0.197683587670326,0.373320281505585]}},\"text\":\"I havent implemented text embeddings yet!\",\"bias\":[0.625,1.354166666666667,0,0],\"scale\":[1,1,1,1],\"metadata_keys\":[\"Brightness\",\"Boominess\",\"Warmth\",\"Sharpness\"]}"
+    },
+    "response": {
+      "type": "decoded",
+      "content": "Decoded successfully"
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:53:13.512021",
+    "request": {
+      "type": "request_audio",
+      "content": "{\"vector\":{\"0\":{\"label\":\"Dimension 1\",\"data\":[-0.815884053707123,-0.437957435846329,-0.219897121191025,-0.396723330020905,-0.399450123310089]},\"1\":{\"label\":\"Dimension 2\",\"data\":[0.435897435897436,0.384615384615385,-0.718037486076355,-0.513552129268646,-0.582379639148712]},\"2\":{\"label\":\"Dimension 3\",\"data\":[-1.116007685661316,-0.409198105335236,-0.77134370803833,-0.54253888130188,-0.224023967981339]},\"3\":{\"label\":\"Dimension 4\",\"data\":[1.052305698394775,-0.503097295761108,-0.311274975538254,-0.197683587670326,0.373320281505585]}},\"text\":\"I havent implemented text embeddings yet!\",\"bias\":[0.625,1.354166666666667,0,0],\"scale\":[1,1,1,1],\"metadata_keys\":[\"Brightness\",\"Boominess\",\"Warmth\",\"Sharpness\"]}"
+    },
+    "response": {
+      "type": "decoded",
+      "content": "Decoded successfully"
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:53:16.497865",
+    "request": {
+      "type": "request_audio",
+      "content": "{\"vector\":{\"0\":{\"label\":\"Dimension 1\",\"data\":[-0.815884053707123,-0.437957435846329,-0.219897121191025,-0.396723330020905,-0.399450123310089]},\"1\":{\"label\":\"Dimension 2\",\"data\":[0,0.025641025641026,-0.718037486076355,-1,-0.82051282051282]},\"2\":{\"label\":\"Dimension 3\",\"data\":[-1.116007685661316,-0.409198105335236,-0.77134370803833,-0.54253888130188,-0.224023967981339]},\"3\":{\"label\":\"Dimension 4\",\"data\":[1.052305698394775,-0.503097295761108,-0.311274975538254,-0.197683587670326,0.373320281505585]}},\"text\":\"I havent implemented text embeddings yet!\",\"bias\":[0.625,1.354166666666667,0,0],\"scale\":[1,1,1,1],\"metadata_keys\":[\"Brightness\",\"Boominess\",\"Warmth\",\"Sharpness\"]}"
+    },
+    "response": {
+      "type": "decoded",
+      "content": "Decoded successfully"
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:53:17.510901",
+    "request": {
+      "type": "request_audio",
+      "content": "{\"vector\":{\"0\":{\"label\":\"Dimension 1\",\"data\":[-0.815884053707123,-0.437957435846329,-0.219897121191025,-0.396723330020905,-0.399450123310089]},\"1\":{\"label\":\"Dimension 2\",\"data\":[0.051282051282051,0.025641025641026,-0.718037486076355,-1,-0.82051282051282]},\"2\":{\"label\":\"Dimension 3\",\"data\":[-1.116007685661316,-0.409198105335236,-0.77134370803833,-0.54253888130188,-0.224023967981339]},\"3\":{\"label\":\"Dimension 4\",\"data\":[1.052305698394775,-0.503097295761108,-0.311274975538254,-0.197683587670326,0.373320281505585]}},\"text\":\"I havent implemented text embeddings yet!\",\"bias\":[0.625,1.354166666666667,0,0],\"scale\":[1,1,1,1],\"metadata_keys\":[\"Brightness\",\"Boominess\",\"Warmth\",\"Sharpness\"]}"
+    },
+    "response": {
+      "type": "decoded",
+      "content": "Decoded successfully"
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:53:25.979590",
+    "request": {
+      "type": "request_audio",
+      "content": "{\"vector\":{\"0\":{\"label\":\"Dimension 1\",\"data\":[-0.815884053707123,-0.437957435846329,-0.219897121191025,-0.396723330020905,-0.399450123310089]},\"1\":{\"label\":\"Dimension 2\",\"data\":[0.41025641025641,0.025641025641026,-0.718037486076355,-1,-0.82051282051282]},\"2\":{\"label\":\"Dimension 3\",\"data\":[-1.116007685661316,-0.409198105335236,-0.77134370803833,-0.54253888130188,-0.224023967981339]},\"3\":{\"label\":\"Dimension 4\",\"data\":[1.052305698394775,-0.503097295761108,-0.311274975538254,-0.197683587670326,0.373320281505585]}},\"text\":\"I havent implemented text embeddings yet!\",\"bias\":[0.625,1.354166666666667,0,0],\"scale\":[1,1,1,1],\"metadata_keys\":[\"Brightness\",\"Boominess\",\"Warmth\",\"Sharpness\"]}"
+    },
+    "response": {
+      "type": "decoded",
+      "content": "Decoded successfully"
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:53:27.022590",
+    "request": {
+      "type": "request_audio",
+      "content": "{\"vector\":{\"0\":{\"label\":\"Dimension 1\",\"data\":[-0.815884053707123,-0.437957435846329,-0.219897121191025,-0.396723330020905,-0.399450123310089]},\"1\":{\"label\":\"Dimension 2\",\"data\":[0.358974358974359,0.358974358974359,-0.718037486076355,-1,-0.82051282051282]},\"2\":{\"label\":\"Dimension 3\",\"data\":[-1.116007685661316,-0.409198105335236,-0.77134370803833,-0.54253888130188,-0.224023967981339]},\"3\":{\"label\":\"Dimension 4\",\"data\":[1.052305698394775,-0.503097295761108,-0.311274975538254,-0.197683587670326,0.373320281505585]}},\"text\":\"I havent implemented text embeddings yet!\",\"bias\":[0.625,1.354166666666667,0,0],\"scale\":[1,1,1,1],\"metadata_keys\":[\"Brightness\",\"Boominess\",\"Warmth\",\"Sharpness\"]}"
+    },
+    "response": {
+      "type": "decoded",
+      "content": "Decoded successfully"
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:53:50.907324",
+    "request": {
+      "type": "request_audio",
+      "content": "{\"vector\":{\"0\":{\"label\":\"Dimension 1\",\"data\":[-0.815884053707123,-0.437957435846329,-0.219897121191025,-0.396723330020905,-0.399450123310089]},\"1\":{\"label\":\"Dimension 2\",\"data\":[0.358974358974359,0,-0.718037486076355,-1,-0.82051282051282]},\"2\":{\"label\":\"Dimension 3\",\"data\":[-1.116007685661316,-0.409198105335236,-0.77134370803833,-0.54253888130188,-0.224023967981339]},\"3\":{\"label\":\"Dimension 4\",\"data\":[1.052305698394775,-0.503097295761108,-0.311274975538254,-0.197683587670326,0.373320281505585]}},\"text\":\"I havent implemented text embeddings yet!\",\"bias\":[0.625,1.354166666666667,0,0],\"scale\":[1,1,1,1],\"metadata_keys\":[\"Brightness\",\"Boominess\",\"Warmth\",\"Sharpness\"]}"
+    },
+    "response": {
+      "type": "decoded",
+      "content": "Decoded successfully"
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:53:52.632275",
+    "request": {
+      "type": "request_audio",
+      "content": "{\"vector\":{\"0\":{\"label\":\"Dimension 1\",\"data\":[-0.815884053707123,-0.437957435846329,-0.219897121191025,-0.396723330020905,-0.399450123310089]},\"1\":{\"label\":\"Dimension 2\",\"data\":[0.358974358974359,0.333333333333333,-0.718037486076355,-1,-0.82051282051282]},\"2\":{\"label\":\"Dimension 3\",\"data\":[-1.116007685661316,-0.409198105335236,-0.77134370803833,-0.54253888130188,-0.224023967981339]},\"3\":{\"label\":\"Dimension 4\",\"data\":[1.052305698394775,-0.503097295761108,-0.311274975538254,-0.197683587670326,0.373320281505585]}},\"text\":\"I havent implemented text embeddings yet!\",\"bias\":[0.625,1.354166666666667,0,0],\"scale\":[1,1,1,1],\"metadata_keys\":[\"Brightness\",\"Boominess\",\"Warmth\",\"Sharpness\"]}"
+    },
+    "response": {
+      "type": "decoded",
+      "content": "Decoded successfully"
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:54:15.992271",
+    "request": {
+      "type": "request_audio",
+      "content": "{\"vector\":{\"0\":{\"label\":\"Dimension 1\",\"data\":[-0.815884053707123,-0.437957435846329,-0.219897121191025,-0.396723330020905,-0.399450123310089]},\"1\":{\"label\":\"Dimension 2\",\"data\":[0.358974358974359,0.333333333333333,-0.718037486076355,-1,-0.82051282051282]},\"2\":{\"label\":\"Dimension 3\",\"data\":[-1.116007685661316,-0.409198105335236,-0.77134370803833,-0.54253888130188,-0.224023967981339]},\"3\":{\"label\":\"Dimension 4\",\"data\":[1.052305698394775,-0.503097295761108,-0.311274975538254,-0.197683587670326,0.373320281505585]}},\"text\":\"I havent implemented text embeddings yet!\",\"bias\":[0.625,1.354166666666667,0,0],\"scale\":[1,1.162790697674419,1,1],\"metadata_keys\":[\"Brightness\",\"Boominess\",\"Warmth\",\"Sharpness\"]}"
+    },
+    "response": {
+      "type": "decoded",
+      "content": "Decoded successfully"
+    }
+  },
+  {
+    "timestamp": "2026-02-18T17:54:18.406086",
+    "request": {
+      "type": "request_audio",
+      "content": "{\"vector\":{\"0\":{\"label\":\"Dimension 1\",\"data\":[-0.815884053707123,-0.437957435846329,-0.219897121191025,-0.396723330020905,-0.399450123310089]},\"1\":{\"label\":\"Dimension 2\",\"data\":[0.358974358974359,0.333333333333333,-0.718037486076355,-1,-0.82051282051282]},\"2\":{\"label\":\"Dimension 3\",\"data\":[-1.116007685661316,-0.409198105335236,-0.77134370803833,-0.54253888130188,-0.224023967981339]},\"3\":{\"label\":\"Dimension 4\",\"data\":[1.052305698394775,-0.503097295761108,-0.311274975538254,-0.197683587670326,0.373320281505585]}},\"text\":\"I havent implemented text embeddings yet!\",\"bias\":[0.625,1.354166666666667,0,0],\"scale\":[1,3.837209302325581,1,1],\"metadata_keys\":[\"Brightness\",\"Boominess\",\"Warmth\",\"Sharpness\"]}"
+    },
+    "response": {
+      "type": "decoded",
+      "content": "Decoded successfully"
+    }
+  }
+]

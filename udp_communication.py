@@ -19,7 +19,8 @@ audio_handler = BufferManager()
 
 
 # --- CONFIGURATION (defaults – nothing heavy happens here) ---
-model_type = 'RAVE'           # or 'STABLE_AUDIO'
+# model_type = 'RAVE'           # or 'STABLE_AUDIO'
+model_type = 'STABLE_AUDIO' 
 model_name = 'percussion'
 model_location = f'timbre_VAE/models/RAVE_models/generative_models/{model_name}.ts'
 vae_path = 'precomputed/control_models/Foley_STABLE_AUDIO_audio_commons_preprocessed_sound_data_EX_Noise_120_waterfall_creaks_vae.pt'
