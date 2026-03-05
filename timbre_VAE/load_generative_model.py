@@ -11,8 +11,15 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 if "HF_TOKEN" not in os.environ:
-    raise EnvironmentError("HF_TOKEN environment variable not set. Please set your HuggingFace token in the environment.")
-print(os.environ["HF_TOKEN"])
+    raise EnvironmentError(
+        "HF_TOKEN environment variable not set.\n"
+        "Get a token at https://huggingface.co/settings/tokens\n"
+        "Then add it to a .env file:  HF_TOKEN=hf_your_token_here"
+    )
+
+# Login globally so hf_hub_download picks up the token automatically
+from huggingface_hub import login as _hf_login
+_hf_login(token=os.environ["HF_TOKEN"], add_to_git_credential=False)
 
 base_dir = 'streamable-stable-audio-open' #replace with fork of shuoyangs repo
 sys.path.append(f'{base_dir}')
@@ -75,7 +82,7 @@ class Model:
             autoencoder, model_config = get_pretrained_pretransform("stabilityai/stable-audio-open-1.0",
                                                                     model_half=False,
                                                                     skip_bottleneck=True,
-                                                                    device=self.device, hf_token=os.environ["HF_TOKEN"])
+                                                                    device=self.device)
 
             print(f"sample_rate: {model_config.get('sample_rate', 'unknown')}")
             print(f"latent_dim: {model_config['model']['pretransform']['config'].get('latent_dim', 'unknown')}")
