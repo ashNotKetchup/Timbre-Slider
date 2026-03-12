@@ -4,12 +4,13 @@ import torch.optim as optim
 import numpy as np
 from itertools import product
 from scipy.signal import resample
+from tqdm import tqdm
 
 
 def prepare_data(sound_data, metadata_keys=None):
         # Prepare latent encodings as training data
         # latent_encodings = [sound['encoding'].squeeze(0).T for sound in sound_data]  # shape: (time, dim)
-        print(f"Preparing data from sound_data with {len(sound_data)} items. Metadata keys: {metadata_keys}")
+        print(f"[data] Preparing {len(sound_data)} items …")
         # Create metadata vectors from 'features_recon' for each sound, resampled to match encoding length
         metadata_vectors = []
         latent_encodings = []  # Also collect latent encodings here
@@ -38,7 +39,6 @@ def prepare_data(sound_data, metadata_keys=None):
                     vec = np.full(enc_len, val)
                 else:
                     vec = resample(val, enc_len, axis=-1)
-                    print(f'Resampled feature "{key}": {vec.shape}')
 
                 features.append(vec)  # Each vec is (296, 1)
                 # After collecting all features, stack and transpose to (296, 5)
@@ -51,7 +51,7 @@ def prepare_data(sound_data, metadata_keys=None):
         # latent_encodings: list of arrays, each (time, dim)
         # metadata_keys: list of feature names in order
 
-        print(f'Prepared {len(latent_encodings)} latent encodings and metadata vectors. Shape of first latent encoding: {latent_encodings[0].shape}, first metadata vector: {metadata_vectors[0].shape}')
+        print(f'[data] {len(latent_encodings)} encodings, shape {latent_encodings[0].shape}')
         latent_data = np.concatenate(latent_encodings, axis=0)  # shape: (total_time, dim)
         latent_data = torch.tensor(latent_data, dtype=torch.float32)
 
@@ -162,7 +162,7 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
     kl_loss_history = []
     attr_loss_history = []
 
-    for epoch in range(epochs):
+    for epoch in tqdm(range(epochs), desc="Training VAE", unit="epoch", ncols=80):
         perm = torch.randperm(latent_data.size(0))
         total_loss = 0
         recon_epoch = 0
@@ -196,8 +196,6 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
         recon_loss_history.append(recon_epoch)
         kl_loss_history.append(kl_epoch)
         attr_loss_history.append(attr_epoch)
-        if (epoch+1) % 10 == 0:
-            print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss:.2f}")
 
     loss_lists = [total_loss_history, recon_loss_history, kl_loss_history, attr_loss_history]
     labels = ['Total Loss', 'Recon Loss', 'KL Loss', 'Attr Loss']

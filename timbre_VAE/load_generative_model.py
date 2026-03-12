@@ -64,7 +64,7 @@ class Model:
         self.model_type = model_type
         self.device = "cpu"
         # "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"Loading model of type {self.model_type}")
+        print(f"[model] Loading {self.model_type} …")
         if self.model_type == 'RAVE':
             if isinstance(model_path, str):
                 self.model_paths: List[str] = [model_path] # make sure everything is a list
@@ -75,7 +75,7 @@ class Model:
             cc.use_cached_conv(False)
 
             
-            print(f"Using device: {self.device}, torch {torch.__version__}")
+            print(f"[model] Device: {self.device}, torch {torch.__version__}")
 
             ## Load the autoencoder from stable-audio-open-1.0
 
@@ -84,10 +84,10 @@ class Model:
                                                                     skip_bottleneck=True,
                                                                     device=self.device)
 
-            print(f"sample_rate: {model_config.get('sample_rate', 'unknown')}")
-            print(f"latent_dim: {model_config['model']['pretransform']['config'].get('latent_dim', 'unknown')}")
-            print(f"downsampling_ratio: {model_config['model']['pretransform']['config'].get('downsampling_ratio', 'unknown')}")
-            print(f"io_channels: {model_config['model']['pretransform']['config'].get('io_channels', 'unknown')}")
+            sr = model_config.get('sample_rate', '?')
+            ldim = model_config['model']['pretransform']['config'].get('latent_dim', '?')
+            ds = model_config['model']['pretransform']['config'].get('downsampling_ratio', '?')
+            print(f"[model] sr={sr}, latent_dim={ldim}, ds_ratio={ds}")
 
             remove_parametrizations(autoencoder)
 
@@ -100,8 +100,8 @@ class Model:
         self.control_model = None
         if control_vae_path and control_vae_input_dim and control_vae_latent_dim:
             self.control_model = ControlModel(control_vae_path, input_dim=control_vae_input_dim, latent_dim=control_vae_latent_dim)
-            print(f"Loaded control VAE from {control_vae_path} with input dim {control_vae_input_dim} and latent dim {control_vae_latent_dim}")
-        else:            print("Control VAE not loaded. To enable latent control, provide control_vae_path, control_vae_input_dim, and control_vae_latent_dim.")
+            print(f"[model] Control VAE loaded (in={control_vae_input_dim}, z={control_vae_latent_dim})")
+        else:            print("[model] No control VAE configured.")
             # self.control_model = ControlModel(control_vae_path, input_dim=loaded_model.encode(torch.randn(1,1,44100)).shape[-1], latent_dim=16) #TODO: get these dimensions dynamically from the model instead of hardcoding
         
 
@@ -139,7 +139,6 @@ class Model:
         Returns:
         Latent representation (y) a np array of shape []
         """
-        print("[DEBUG] Model.encode self.control_model is None:", self.control_model is None, "id:", id(self.control_model))
         # check type, convert np to torch, so we can take both....
         # print(type(audio_array))
         # print('ENCODING')
@@ -164,7 +163,7 @@ class Model:
         # latent_vector:np.ndarray = encoding_torch.cpu().numpy()
         latent_text:str = 'I havent implemented text embeddings yet!'
         # log(f"Generated latent array of shape {latent_vector.shape}, max {latent_embedding.max()}, min {latent_embedding.min()}")
-        print(f"Generated latent vector of shape {latent_vector.shape}, max {latent_vector.max()}, min {latent_vector.min()}")
+        print(f"[model] Encoded: {latent_vector.shape}")
         if self.control_model is not None:
             # Optionally encode with VAE (control model)
             latent_vector_flat = latent_vector.squeeze(0).T if latent_vector.ndim == 3 else latent_vector
@@ -172,7 +171,7 @@ class Model:
                 vae_z = self.control_model.encode_z(torch.from_numpy(latent_vector_flat))
             latent_vector = vae_z.T[np.newaxis, ...]  # reshape back to (1, latent_dim) for consistency
             latent_vector = latent_vector.cpu().numpy() if hasattr(latent_vector, "cpu") else np.array(latent_vector)
-            print(f"Final latent vector shape after control model (if applied): {latent_vector.shape}, max {latent_vector.max()}, min {latent_vector.min()}")
+            print(f"[model] Control-encoded: {latent_vector.shape}")
         return latent_vector, latent_text
 
     def decode(self, latent_vector:np.ndarray, latent_text:str='', use_text:bool=False) -> np.ndarray:
@@ -185,36 +184,27 @@ class Model:
         Returns:
         Audio_file (x_hat): np array of shape [], where
         """
-        print(f"[decode] Input latent_vector type: {type(latent_vector)}, shape: {getattr(latent_vector, 'shape', 'N/A')}")
+        # Optionally decode with VAE (control model)
         if self.control_model is not None:
-            # Optionally decode with VAE (control model)
-            print(f"[decode] Before control_model.decode, latent_vector shape: {latent_vector.shape}")
-            # Use encode_z for consistency if needed in future (currently decode expects z)
             latent_vector = self.control_model.decode(torch.tensor(latent_vector.squeeze(0).T))
-            print(f"[decode] After control_model.decode, latent_vector type: {type(latent_vector)}, shape: {getattr(latent_vector, 'shape', 'N/A')}")
-        print(f"[decode] Before torch conversion, latent_vector type: {type(latent_vector)}, shape: {getattr(latent_vector, 'shape', 'N/A')}")
         
         
         # Try both transpositions for latent_vector to torch.Tensor
         try:
             latent_torch = torch.Tensor(latent_vector.T)
             if latent_torch.ndim == 2:
-                latent_torch = latent_torch.unsqueeze(0)  # add batch dimension if missing
-            print(f"[decode] Trying latent_vector.T: {latent_torch.shape}")
+                latent_torch = latent_torch.unsqueeze(0)
             with torch.no_grad():
                 decoded_audio_torch = reduce(lambda z, each_decoder: each_decoder.decode(z), reversed(self.models), latent_torch)
         except Exception as e1:
-            print(f"[decode] latent_vector.T failed: {e1}")
             try:
                 latent_torch = torch.Tensor(latent_vector)
                 if latent_torch.ndim == 2:
-                    latent_torch = latent_torch.unsqueeze(0)  # add batch dimension if missing
-                print(f"[decode] Trying latent_vector (no transpose): {latent_torch.shape}")
+                    latent_torch = latent_torch.unsqueeze(0)
                 with torch.no_grad():
                     decoded_audio_torch = reduce(lambda z, each_decoder: each_decoder.decode(z), reversed(self.models), latent_torch)
             except Exception as e2:
-                print(f"[decode] latent_vector (no transpose) also failed: {e2}")
-                raise RuntimeError("Both latent_vector.T and latent_vector failed for decoding.") from e2
+                raise RuntimeError("Both latent transpositions failed for decoding.") from e2
 
         decoded_audio = decoded_audio_torch.numpy(force=True) # size (1,2,length), which we don't want
 
@@ -405,9 +395,7 @@ class LatentRepresentation:
         else:
             loaded_json = json.loads(json_in)
 
-        print("Loaded JSON type:", type(loaded_json))
         loaded_text  = loaded_json['text']
-        print("Loaded text type:", type(loaded_text), loaded_text)
         # print('text: ', loaded_text)
   
         items = sorted(loaded_json['vector'].items(), key=lambda kv: int(kv[0]))

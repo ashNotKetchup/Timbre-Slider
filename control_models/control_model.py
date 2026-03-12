@@ -33,7 +33,7 @@ class ControlModel:
             self.model.load_state_dict(checkpoint)
         self.model.eval()
         self.model.to(self.device)
-        print(f"Reloaded VAE from {self.vae_path}")
+        print(f"[control] VAE loaded (in={self.input_dim}, z={self.latent_dim})")
 
     def encode(self, x_np):
         x = torch.tensor(x_np, dtype=torch.float32, device=self.device)

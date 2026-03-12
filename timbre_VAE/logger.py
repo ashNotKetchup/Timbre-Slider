@@ -37,8 +37,7 @@ class RequestLogger:
             "response": response,
         }
         self._entries.append(entry)
-        print(f"[Logger] #{len(self._entries)}  {entry['timestamp']}  "
-              f"req={request.get('type', '?')}  res={response.get('type', '?')}")
+        print(f"[log] #{len(self._entries)} {request.get('type', '?')} → {response.get('type', '?')}")
 
     # ---- export helpers ----
     def to_json(self, indent: int = 2) -> str:
@@ -48,7 +47,7 @@ class RequestLogger:
         """Write the full log to *path* and return the absolute path."""
         with open(path, "w") as f:
             f.write(self.to_json())
-        print(f"[Logger] Saved {len(self._entries)} entries to {path}")
+        print(f"[log] Saved {len(self._entries)} entries → {path}")
         return os.path.abspath(path)
 
     def open_save_dialogue(self) -> str | None:
@@ -125,7 +124,7 @@ class RequestLogger:
                 else:
                     path = _try_linux()
             except Exception as e:
-                print(f"[Logger] Save dialogue error: {e}")
+                print(f"[log] Save dialog error: {e}")
 
             if path:
                 if not path.endswith(".json"):
@@ -137,7 +136,7 @@ class RequestLogger:
                 fallback = os.path.join(os.getcwd(), default_name)
                 self.save_to_file(fallback)
                 result[0] = fallback
-                print(f"[Logger] No GUI available – auto-saved to {fallback}")
+                print(f"[log] Auto-saved → {fallback}")
 
         t = threading.Thread(target=_dialogue, daemon=True)
         t.start()
@@ -150,4 +149,4 @@ class RequestLogger:
 
     def clear(self) -> None:
         self._entries.clear()
-        print("[Logger] Cleared all log entries.")
+        print("[log] Cleared.")

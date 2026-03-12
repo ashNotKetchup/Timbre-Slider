@@ -25,7 +25,7 @@ def mass_preprocess(sample_folder, model_name='nasa', model_type='STABLE_AUDIO',
             sample_folder,
             f"{os.path.basename(sample_folder)}_{model_type}_{feature_type}_preprocessed_sound_data.pkl",
         )
-        print(f'Processing {len(sound_files)} files in {sample_folder} with feature type {feature_type}')
+        print(f'[preprocess] {len(sound_files)} files × {feature_type} in {os.path.basename(sample_folder)}')
         get_features(
             sound_files,
             feature_type,
@@ -34,7 +34,7 @@ def mass_preprocess(sample_folder, model_name='nasa', model_type='STABLE_AUDIO',
             overwrite=overwrite,
             root_folder=sample_folder
         )
-        print(f'Saved features to {feature_save_path}')
+        print(f'[preprocess] Saved → {os.path.basename(feature_save_path)}')
         results[feature_type] = feature_save_path
     # PCA reuses the raw_features cache
     if 'raw_features' in results:

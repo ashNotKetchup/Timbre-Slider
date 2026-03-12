@@ -8,6 +8,7 @@ import timbral_models
 import pickle
 import pandas as pd
 from sklearn.decomposition import PCA
+from tqdm import tqdm
 
 def audio_features(audio_y, sr=44100, use_mean=False, feature_type='raw_features'):
     '''Compute timbre features for each audio file and its encoding'''
@@ -49,7 +50,7 @@ def batch_compute_features(sound_files, root_folder='sounds', use_recon=True, mo
     '''
     audio_features_list = []
 
-    for sound_file in sound_files:
+    for sound_file in tqdm(sound_files, desc="Computing features", unit="file", ncols=80):
         path = os.path.join(root_folder, sound_file)
         if use_recon and model is None:
             raise ValueError("Model must be provided if use_recon is True.")
@@ -92,14 +93,13 @@ def batch_compute_features(sound_files, root_folder='sounds', use_recon=True, mo
                 }
             )
         except Exception as e:
-            print(f"Error processing {sound_file}: {e}")
+            print(f"[features] ✗ {sound_file}: {e}")
 
     if feature_type == 'PCA' or feature_type == 'pca':
         key_features, _, pca = pca_attributes(audio_features_list, 'features_recon')
     else:
         key_features, _ = filter_attributes(audio_features_list, 'features_recon')
-    print(f"\nSuccessfully processed {len(audio_features_list)} files.")
-    print('shapes of features_recon:', [{k: v.shape if isinstance(v, np.ndarray) else 'scalar' for k, v in item['features_recon'].items()} for item in audio_features_list])
+    print(f"[features] Processed {len(audio_features_list)} files")
     return audio_features_list, key_features, pca
 
 
@@ -126,7 +126,7 @@ def get_features(sound_files, feature_type, model=None, save_path=None, overwrit
                 key_features, _ = filter_attributes(sound_data, 'features_recon')
                 with open(key_features_path, 'wb') as kf:
                     pickle.dump(key_features, kf)
-            print(f'Loaded preprocessed sound data from {save_path}.')
+            print(f'[features] Loaded cached data from {os.path.basename(save_path)}')
             return sound_data, key_features, pca
 
     # Compute features and save if needed
@@ -139,7 +139,7 @@ def get_features(sound_files, feature_type, model=None, save_path=None, overwrit
         if pca is not None:
             with open(pca_path, 'wb') as pf:
                 pickle.dump(pca, pf)
-        print(f'Saved preprocessed sound data to {save_path}.')
+        print(f'[features] Saved to {os.path.basename(save_path)}')
     return sound_data, key_features, pca
 
 
@@ -181,24 +181,17 @@ def filter_attributes(array_of_dicts, key, n_clusters=4, random_state=0):
             }
             feature_dicts.append(scalar_fd)
     df = pd.DataFrame(feature_dicts)
-    print("[filter_attributes] DataFrame preview:")
-    print(df.head())
-    print("[filter_attributes] Features DataFrame before filtering:")
-    print(df)
     # Drop columns with non-numeric or all-NaN values
     df = df.select_dtypes(include=[np.number]).dropna(axis=1, how='all')
     if df.shape[1] == 0:
-        print("[filter_attributes] All features are NaN or non-numeric. No valid features to cluster.")
         return [], []
     # Fallback: if only one row, return all features
     if len(df) == 1:
-        print("[filter_attributes] Only one sample present. Returning all features.")
         selected_features = list(df.columns)
         reduced_dicts = [{f: df.iloc[0][f] for f in selected_features}]
         return selected_features, reduced_dicts
     # Additional check: if all values in all columns are NaN
     if df.isna().all().all():
-        print("[filter_attributes] All feature values are NaN after filtering. Returning empty results.")
         return [], []
 
     # Cluster features (columns)
@@ -207,7 +200,6 @@ def filter_attributes(array_of_dicts, key, n_clusters=4, random_state=0):
     # Transpose: cluster columns (features)
     X_T = X.T
     n_clusters = min(n_clusters, X_T.shape[0])
-    print(f"[filter_attributes] Clustering {X_T.shape[0]} features into {n_clusters} clusters.")
     kmeans = KMeans(n_clusters=n_clusters, random_state=random_state, n_init=10)
     cluster_labels = kmeans.fit_predict(X_T)
 
@@ -219,7 +211,6 @@ def filter_attributes(array_of_dicts, key, n_clusters=4, random_state=0):
             continue
         # Compute variance for each feature in the cluster
         variances = df[cluster_cols].var(axis=0)
-        print(f"[filter_attributes] Variances for cluster {cluster}: {variances}")
         # Only consider features with non-NaN variance
         valid_variances = variances.dropna()
         if valid_variances.empty:
@@ -235,10 +226,9 @@ def filter_attributes(array_of_dicts, key, n_clusters=4, random_state=0):
         reduced_dicts.append(reduced)
 
     if len(selected_features) == 0:
-        print("[filter_attributes] No features selected after clustering. Returning input results.")
-        return list(df.columns), feature_dicts  # Return original features if none selected
+        return list(df.columns), feature_dicts
 
-    print(f"[filter_attributes] Selected features: {selected_features}")
+    print(f"[features] Selected: {selected_features}")
     return selected_features, reduced_dicts
 
 
@@ -273,20 +263,15 @@ def pca_attributes(array_of_dicts, key, n_dim=4, random_state=0):
             })
 
     df = pd.DataFrame(all_rows)
-    print("[pca_attributes] DataFrame preview:")
-    print(df.head())
 
     # --- 2. Clean up ---
     df = df.select_dtypes(include=[np.number]).dropna(axis=1, how='all')
     feature_cols = list(df.columns)
     if len(feature_cols) == 0:
-        print("[pca_attributes] All features are NaN or non-numeric.")
         return [], [], None
     if len(df) <= 1:
-        print("[pca_attributes] Not enough rows for PCA.")
         return [], [], None
     if df.isna().all().all():
-        print("[pca_attributes] All values NaN.")
         return [], [], None
 
     # --- 3. Fit PCA ---
@@ -295,10 +280,8 @@ def pca_attributes(array_of_dicts, key, n_dim=4, random_state=0):
     pca = PCA(n_components=n_components, random_state=random_state)
     pca.fit(X)
 
+    print(f"[features] PCA {n_components}D, explained var: {pca.explained_variance_ratio_.sum():.0%}")
     selected_features = [f"Dim {i+1}" for i in range(n_components)]
-    print(f"[pca_attributes] Explained variance ratio: {pca.explained_variance_ratio_}")
-    print(f"[pca_attributes] Total explained variance: {pca.explained_variance_ratio_.sum():.4f}")
-    print(f"[pca_attributes] Selected PCA dimensions: {selected_features}")
 
     # --- 4. Apply fitted PCA to each sample's original features ---
     reduced_dicts = []

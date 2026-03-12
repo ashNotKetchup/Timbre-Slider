@@ -31,5 +31,8 @@ pandas
 ipywidgets
 ipython
 
+# --- Progress ---
+tqdm
+
 # --- Misc ---
 packaging
