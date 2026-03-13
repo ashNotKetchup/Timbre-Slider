@@ -125,6 +125,14 @@ const sendToServer = async (message, timeoutMs = 300000) => {
 	}
 };
 
+const isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+
+const outletReplyDict = async (reply) => {
+	if (isPlainObject(reply)) {
+		await maxApi.outlet(reply);
+	}
+};
+
 maxApi.addHandlers({
 	set_regularisation: async (index) => {
 		const idx = parseInt(index, 10);
@@ -182,12 +190,14 @@ maxApi.addHandlers({
 
 		if (reply["type"] == 'latent' ){
 			console.log("Received latent representation from Python server: ", reply["content"]);
-			const dict = await maxApi.setDict(DICT_ID, reply["content"]);
+			await maxApi.setDict(DICT_ID, reply["content"]);
 			// for debugging:
-			 await maxApi.outlet(dict);
+			 await maxApi.outlet(reply);
 
 			//  Necessary to signal Max that the dict has been updated
 			await maxApi.outlet("Updated");
+		} else {
+			await outletReplyDict(reply);
 		}
 	},
 	load_folder: async (folderPath) => {
@@ -196,6 +206,7 @@ maxApi.addHandlers({
 			"content": folderPath
 		};
 		const reply = await sendToServer(message);
+		await outletReplyDict(reply);
 		if (reply["type"] === "load_folder_done") {
 			console.log("Loaded folder and computed features:", reply["content"]);
 			await maxApi.outlet("Folder loaded");
@@ -214,12 +225,13 @@ maxApi.addHandlers({
 			// If the reply includes latent data, update the dict
 			if (reply["latent"]) {
 				console.log("Received latent representation after retrain:", reply["latent"]);
-				const dict = await maxApi.setDict(DICT_ID, reply["latent"]);
-				await maxApi.outlet(dict);
+				await maxApi.setDict(DICT_ID, reply["latent"]);
+				await maxApi.outlet({ type: "latent", content: reply["latent"] });
 				await maxApi.outlet("Updated");
 			}
 			await maxApi.outlet("Retrain complete");
 		} else {
+			await outletReplyDict(reply);
 			console.error("VAE retraining failed:", reply);
 			await maxApi.outlet("Retrain failed");
 		}
@@ -242,6 +254,7 @@ maxApi.addHandlers({
 		};
 
 		const reply = await sendToServer(message);
+		await outletReplyDict(reply);
 
 		// Feedback via Max outlet
 		const new_dict = JSON.parse(json);
@@ -252,6 +265,7 @@ maxApi.addHandlers({
 		const message = { "type": "save_logs", "content": "" };
 		try {
 			const reply = await sendToServer(message);
+			await outletReplyDict(reply);
 			if (reply["type"] === "save_logs_done") {
 				console.log("Logs saved:", reply["content"]);
 				await maxApi.outlet("Logs saved");
@@ -276,6 +290,7 @@ maxApi.addHandlers({
 			const message = { "type": "export_sound", "content": args.length ? args[0] : "" };
 			try {
 				const reply = await sendToServer(message);
+				await outletReplyDict(reply);
 				console.log("export_sound logged:", reply);
 				await maxApi.outlet("Export sound logged");
 			} catch (err) {

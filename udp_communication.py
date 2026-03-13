@@ -207,7 +207,6 @@ def handle_request_latent(message):
     try:
         audio_handler.load_buffer(audio_path)
         audio_in = audio_handler.get_input_buffer()
-        audio_handler.set_output_buffer(audio_in)
         assert isinstance(audio_in, np.ndarray), 'internal buffer has wrong type, not numpy'
     except Exception as e:
         print(f"[encode] ✗ Load failed: {e}")
@@ -215,7 +214,13 @@ def handle_request_latent(message):
 
     try:
         if timbre_gen_model is None or timbre_gen_model.control_model is None:
-            return {"type": "error", "content": "Model not ready. Please load a folder and retrain the VAE first."}
+            audio_handler.set_output_buffer(audio_in)
+            print("[encode] ⚠ No model trained yet — passthrough input to output")
+            print("No model trained yet. Passing input audio through to output.")
+            return {
+                "type": "warning",
+                "content": "No model trained yet. Passing input audio through to output."
+            }
         # Encode with generative model
         latent_vector, latent_text = timbre_gen_model.encode(audio_in)
         assert isinstance(latent_vector, np.ndarray) and isinstance(latent_text, str), 'encodings not right type'
@@ -259,6 +264,17 @@ def handle_request_audio(message):
     latent_data = message['content']
     print("[decode] Received latent data")
     try:
+        if timbre_gen_model is None or timbre_gen_model.control_model is None:
+            passthrough_audio = audio_handler.get_input_buffer()
+            if isinstance(passthrough_audio, np.ndarray):
+                audio_handler.set_output_buffer(passthrough_audio, save_plot=True)
+                print("[decode] ⚠ No model trained yet — passthrough input to output")
+                print("No model trained yet. Passing input audio through to output.")
+                return {
+                    "type": "warning",
+                    "content": "No model trained yet. Passing input audio through to output."
+                }
+
         if not isinstance(latent_data, dict):
             # Try to parse as JSON string
             try:
