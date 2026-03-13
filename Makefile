@@ -1,6 +1,9 @@
-# Makefile for Timbre-Slider workflows
+# Makefile for MALT workflows
 
-.PHONY: setup install init-submodule check-env download-model run-udp open-frontend launch-interface preprocess
+.PHONY: setup install init-submodule check-env download-model run-udp open-frontend launch-interface preprocess restart-server kill-server
+
+LOG_DEPTH ?= normal
+KILL_SERVER_SILENT ?= 0
 
 # ---------- Full setup (first time) ----------
 
@@ -21,7 +24,10 @@ init-submodule:
 # Check that .env has a real token
 check-env:
 	@[ -f .env ] || (echo "❌ .env file not found. Run: cp .env.example .env" && exit 1)
-	@grep -q '^HF_TOKEN=hf_' .env || echo "⚠️  HF_TOKEN in .env looks like a placeholder — update it with your real token"
+	@token=$$(awk -F= '/^[[:space:]]*HF_TOKEN[[:space:]]*=/{v=$$2; gsub(/^[[:space:]]+|[[:space:]]+$$/,"",v); gsub(/^"|"$$/,"",v); print v; exit}' .env); \
+	if [ -z "$$token" ] || [ "$$token" = "hf_your_token_here" ] || ! echo "$$token" | grep -Eq '^hf_[A-Za-z0-9]+'; then \
+		echo "⚠️  HF_TOKEN in .env looks like a placeholder — update it with your real token"; \
+	fi
 
 # Download Stable Audio Open 1.0 model weights (cached in ~/.cache/huggingface)
 download-model: check-env
@@ -29,12 +35,30 @@ download-model: check-env
 
 # ---------- Run ----------
 
+# Kill any process currently listening on port 5000
+kill-server:
+	-@pids=$$(lsof -ti tcp:5000 2>/dev/null); \
+	if [ -n "$$pids" ]; then \
+		if [ "$(KILL_SERVER_SILENT)" != "1" ]; then \
+			echo "Stopping existing server on :5000 ($$pids)"; \
+		fi; \
+		kill $$pids; \
+		sleep 1; \
+	fi
+
 # Launch interface: run HTTP server and open Max/MSP frontend
-launch-interface: check-env
-	. .venv/bin/activate && (python3 udp_communication.py &)
-	sleep 1
-	open frontend/frontend.maxpat
-	@echo "Frontend launched. Server running in background."
+launch-interface: KILL_SERVER_SILENT=1
+launch-interface: kill-server
+	@echo "(Re)Launching MALT server on :5000"
+	@. .venv/bin/activate && (LOG_DEPTH=minimal PYTHONWARNINGS=ignore python3 udp_communication.py &)
+	@sleep 1
+	@open frontend/frontend.maxpat
+
+# Restart the HTTP server in minimal log mode
+restart-server: KILL_SERVER_SILENT=1
+restart-server: kill-server
+	@echo "(Re)Launching MALT server on :5000"
+	@. .venv/bin/activate && (LOG_DEPTH=minimal PYTHONWARNINGS=ignore python3 udp_communication.py &)
 
 # Preprocess audio: compute features for a folder of sounds
 # Usage: make preprocess FOLDER=sounds/Foley
@@ -49,7 +73,7 @@ install:
 	. .venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt
 
 # Run the HTTP server
-run-udp: check-env
+run-udp: check-env kill-server
 	. .venv/bin/activate && python3 udp_communication.py
 	@echo "Server running. Use Ctrl+C to stop."
 

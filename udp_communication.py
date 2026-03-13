@@ -1,9 +1,43 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import os
+import builtins
+import warnings
+import logging
 import random
 import numpy as np
 import torch
+
+
+# --- CONSOLE LOG DEPTH ---
+LOG_DEPTH = os.getenv("LOG_DEPTH", "normal").strip().lower()
+if LOG_DEPTH in {"minimal", "quiet", "silent", "0"}:
+    warnings.filterwarnings("ignore")
+    logging.disable(logging.WARNING)
+    _original_print = builtins.print
+
+    def _minimal_print(*args, **kwargs):
+        msg = " ".join(str(a) for a in args).lstrip()
+        starts_with_bracket = msg.startswith("[")
+        looks_like_warning = (
+            "warning" in msg.lower()
+            or msg.startswith("UserWarning")
+            or msg.startswith("FutureWarning")
+            or msg.startswith("DeprecationWarning")
+        )
+        looks_like_error = (
+            "error" in msg.lower()
+            or "exception" in msg.lower()
+            or "traceback" in msg.lower()
+            or "✗" in msg
+        )
+
+        # In minimal mode: hide bracket-prefixed logs and warnings, keep errors.
+        if (starts_with_bracket or looks_like_warning) and not looks_like_error:
+            return
+        _original_print(*args, **kwargs)
+
+    builtins.print = _minimal_print
 
 from timbre_VAE.load_audio import BufferManager
 from timbre_VAE.load_generative_model import Model, LatentRepresentation, ControlModel
@@ -321,6 +355,12 @@ UDP Server Message Types:
 """
 
 class SimpleHandler(BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        # Silence default HTTP access logs in minimal mode.
+        if LOG_DEPTH in {"minimal", "quiet", "silent", "0"}:
+            return
+        super().log_message(format, *args)
+
     def do_POST(self):
         length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(length)
@@ -353,5 +393,5 @@ class SimpleHandler(BaseHTTPRequestHandler):
 
 
 server = HTTPServer(("127.0.0.1", 5000), SimpleHandler)
-print("\n🎛  Timbre-Slider server listening on http://127.0.0.1:5000\n")
+print("\n🎛  MALT server listening on http://127.0.0.1:5000\n")
 server.serve_forever()
