@@ -99,9 +99,18 @@ let initialDict = {
 //		* Async Functions on MDN: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/async_function
 
 // form for sending messages to python server and receiving replies
+const emitClientStatus = async (isAwaiting) => {
+	try {
+		await maxApi.outlet({ type: "client_busy", content: isAwaiting ? 1 : 0 });
+	} catch (_) {
+		// Non-fatal: status signaling should never break request flow.
+	}
+};
+
 const sendToServer = async (message, timeoutMs = 300000) => {	
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), timeoutMs);
+	await emitClientStatus(true);
 	try {
 		const res = await fetch(URL, {
 			method: "POST",
@@ -109,19 +118,20 @@ const sendToServer = async (message, timeoutMs = 300000) => {
 			body: JSON.stringify(message),
 			signal: controller.signal
 		});
-		clearTimeout(timer);
 		
 		// python -> node response
 		const reply = await res.json();
 		console.log("Node received reply of type:", reply["type"]);
 		return reply;
 	} catch (err) {
-		clearTimeout(timer);
 		if (err.name === 'AbortError') {
 			console.error("Request timed out after", timeoutMs, "ms");
 			return { type: "error", content: "Request timed out" };
 		}
 		throw err;
+	} finally {
+		clearTimeout(timer);
+		await emitClientStatus(false);
 	}
 };
 
