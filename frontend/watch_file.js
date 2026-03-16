@@ -8,7 +8,10 @@ const maxApi = require("max-api");
 
 // Resolve the absolute (full) path
 // const fullPath = path.resolve(relativePath);
-const fullPath = "/Users/ash/Documents/GitHub/Timbre-Slider/audio/output.wav";
+const fullPath = path.resolve("../audio/output.wav")
+// process.cwd();
+// "/Users/ash/Documents/GitHub/Timbre-Slider/audio/output.wav";
+
 
 maxApi.outlet(fullPath);
 
