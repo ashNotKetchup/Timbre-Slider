@@ -1,9 +1,43 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import os
+import builtins
+import warnings
+import logging
 import random
 import numpy as np
 import torch
+
+
+# --- CONSOLE LOG DEPTH ---
+LOG_DEPTH = os.getenv("LOG_DEPTH", "normal").strip().lower()
+if LOG_DEPTH in {"minimal", "quiet", "silent", "0"}:
+    warnings.filterwarnings("ignore")
+    logging.disable(logging.WARNING)
+    _original_print = builtins.print
+
+    def _minimal_print(*args, **kwargs):
+        msg = " ".join(str(a) for a in args).lstrip()
+        starts_with_bracket = msg.startswith("[")
+        looks_like_warning = (
+            "warning" in msg.lower()
+            or msg.startswith("UserWarning")
+            or msg.startswith("FutureWarning")
+            or msg.startswith("DeprecationWarning")
+        )
+        looks_like_error = (
+            "error" in msg.lower()
+            or "exception" in msg.lower()
+            or "traceback" in msg.lower()
+            or "✗" in msg
+        )
+
+        # In minimal mode: hide bracket-prefixed logs and warnings, keep errors.
+        if (starts_with_bracket or looks_like_warning) and not looks_like_error:
+            return
+        _original_print(*args, **kwargs)
+
+    builtins.print = _minimal_print
 
 from timbre_VAE.load_audio import BufferManager
 from timbre_VAE.load_generative_model import Model, LatentRepresentation, ControlModel
@@ -173,7 +207,6 @@ def handle_request_latent(message):
     try:
         audio_handler.load_buffer(audio_path)
         audio_in = audio_handler.get_input_buffer()
-        audio_handler.set_output_buffer(audio_in)
         assert isinstance(audio_in, np.ndarray), 'internal buffer has wrong type, not numpy'
     except Exception as e:
         print(f"[encode] ✗ Load failed: {e}")
@@ -181,7 +214,13 @@ def handle_request_latent(message):
 
     try:
         if timbre_gen_model is None or timbre_gen_model.control_model is None:
-            return {"type": "error", "content": "Model not ready. Please load a folder and retrain the VAE first."}
+            audio_handler.set_output_buffer(audio_in)
+            print("[encode] ⚠ No model trained yet — passthrough input to output")
+            print("No model trained yet. Passing input audio through to output.")
+            return {
+                "type": "warning",
+                "content": "No model trained yet. Passing input audio through to output."
+            }
         # Encode with generative model
         latent_vector, latent_text = timbre_gen_model.encode(audio_in)
         assert isinstance(latent_vector, np.ndarray) and isinstance(latent_text, str), 'encodings not right type'
@@ -225,6 +264,17 @@ def handle_request_audio(message):
     latent_data = message['content']
     print("[decode] Received latent data")
     try:
+        if timbre_gen_model is None or timbre_gen_model.control_model is None:
+            passthrough_audio = audio_handler.get_input_buffer()
+            if isinstance(passthrough_audio, np.ndarray):
+                audio_handler.set_output_buffer(passthrough_audio, save_plot=True)
+                print("[decode] ⚠ No model trained yet — passthrough input to output")
+                print("No model trained yet. Passing input audio through to output.")
+                return {
+                    "type": "warning",
+                    "content": "No model trained yet. Passing input audio through to output."
+                }
+
         if not isinstance(latent_data, dict):
             # Try to parse as JSON string
             try:
@@ -321,6 +371,12 @@ UDP Server Message Types:
 """
 
 class SimpleHandler(BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        # Silence default HTTP access logs in minimal mode.
+        if LOG_DEPTH in {"minimal", "quiet", "silent", "0"}:
+            return
+        super().log_message(format, *args)
+
     def do_POST(self):
         length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(length)
@@ -353,5 +409,5 @@ class SimpleHandler(BaseHTTPRequestHandler):
 
 
 server = HTTPServer(("127.0.0.1", 5000), SimpleHandler)
-print("\n🎛  Timbre-Slider server listening on http://127.0.0.1:5000\n")
+print("\n🎛  MALT server listening on http://127.0.0.1:5000\n")
 server.serve_forever()

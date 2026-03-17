@@ -1,8 +1,8 @@
-# Timbre-Slider
+# MALT (Manipulating Audio with Latent Timbre)
 
 Example- and semantic-driven timbre interpolation in latent space. Adapted from the [Slider project](https://www.eca.ed.ac.uk/) at the University of Edinburgh.
 
-Timbre-Slider encodes audio into a neural latent space (via RAVE or Stable Audio Open 1.0), extracts perceptual timbre features, trains a lightweight VAE to learn a control subspace, and exposes interactive sliders — in a Jupyter notebook or a Max/MSP frontend — to manipulate timbral qualities in real time.
+MALT encodes audio into a neural latent space (via RAVE or Stable Audio Open 1.0), extracts perceptual timbre features, trains a lightweight VAE to learn a control subspace, and exposes interactive sliders — in a Jupyter notebook or a Max/MSP frontend — to manipulate timbral qualities in real time.
 
 ## Prerequisites
 
@@ -103,12 +103,22 @@ Copy `.env.example` to `.env` and fill in:
 |---|---|
 | `make setup` | Create venv, install deps, init submodule, create `.env` |
 | `make download-model` | Download & cache Stable Audio Open weights (~1.2 GB) |
-| `make launch-interface` | Start server + open Max/MSP frontend |
-| `make run-udp` | Start the HTTP server only |
+| `make launch-interface` | Minimal mode: show only `(Re)Launchin MALT server on :5000`, then open frontend |
+| `make restart-server` | Minimal mode: show only `(Re)Launchin MALT server on :5000` |
+| `make run-udp` | Stop existing :5000 server, then start the HTTP server only |
 | `make open-frontend` | Open the Max/MSP patch only |
 | `make preprocess` | Batch-compute features for audio in `sounds/` |
 | `make install` | Reinstall deps in existing venv |
 | `make check-env` | Verify `.env` is configured |
+
+### Log depth
+
+The server supports a `LOG_DEPTH` environment flag:
+
+- `LOG_DEPTH=minimal`: suppresses warnings and bracket-prefixed logs (for quiet live use)
+- default (`normal`): standard informational logs
+
+`make launch-interface` and `make restart-server` run with `LOG_DEPTH=minimal` automatically.
 
 ## Adding Your Own Sounds
 

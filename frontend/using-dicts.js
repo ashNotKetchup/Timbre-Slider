@@ -99,9 +99,18 @@ let initialDict = {
 //		* Async Functions on MDN: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/async_function
 
 // form for sending messages to python server and receiving replies
+const emitClientStatus = async (isAwaiting) => {
+	try {
+		await maxApi.outlet({ type: "client_busy", content: isAwaiting ? 1 : 0 });
+	} catch (_) {
+		// Non-fatal: status signaling should never break request flow.
+	}
+};
+
 const sendToServer = async (message, timeoutMs = 300000) => {	
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), timeoutMs);
+	await emitClientStatus(true);
 	try {
 		const res = await fetch(URL, {
 			method: "POST",
@@ -109,19 +118,28 @@ const sendToServer = async (message, timeoutMs = 300000) => {
 			body: JSON.stringify(message),
 			signal: controller.signal
 		});
-		clearTimeout(timer);
 		
 		// python -> node response
 		const reply = await res.json();
 		console.log("Node received reply of type:", reply["type"]);
 		return reply;
 	} catch (err) {
-		clearTimeout(timer);
 		if (err.name === 'AbortError') {
 			console.error("Request timed out after", timeoutMs, "ms");
 			return { type: "error", content: "Request timed out" };
 		}
 		throw err;
+	} finally {
+		clearTimeout(timer);
+		await emitClientStatus(false);
+	}
+};
+
+const isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+
+const outletReplyDict = async (reply) => {
+	if (isPlainObject(reply)) {
+		await maxApi.outlet(reply);
 	}
 };
 
@@ -182,12 +200,14 @@ maxApi.addHandlers({
 
 		if (reply["type"] == 'latent' ){
 			console.log("Received latent representation from Python server: ", reply["content"]);
-			const dict = await maxApi.setDict(DICT_ID, reply["content"]);
+			await maxApi.setDict(DICT_ID, reply["content"]);
 			// for debugging:
-			 await maxApi.outlet(dict);
+			 await maxApi.outlet(reply);
 
 			//  Necessary to signal Max that the dict has been updated
 			await maxApi.outlet("Updated");
+		} else {
+			await outletReplyDict(reply);
 		}
 	},
 	load_folder: async (folderPath) => {
@@ -196,6 +216,7 @@ maxApi.addHandlers({
 			"content": folderPath
 		};
 		const reply = await sendToServer(message);
+		await outletReplyDict(reply);
 		if (reply["type"] === "load_folder_done") {
 			console.log("Loaded folder and computed features:", reply["content"]);
 			await maxApi.outlet("Folder loaded");
@@ -214,12 +235,13 @@ maxApi.addHandlers({
 			// If the reply includes latent data, update the dict
 			if (reply["latent"]) {
 				console.log("Received latent representation after retrain:", reply["latent"]);
-				const dict = await maxApi.setDict(DICT_ID, reply["latent"]);
-				await maxApi.outlet(dict);
+				await maxApi.setDict(DICT_ID, reply["latent"]);
+				await maxApi.outlet({ type: "latent", content: reply["latent"] });
 				await maxApi.outlet("Updated");
 			}
 			await maxApi.outlet("Retrain complete");
 		} else {
+			await outletReplyDict(reply);
 			console.error("VAE retraining failed:", reply);
 			await maxApi.outlet("Retrain failed");
 		}
@@ -242,6 +264,7 @@ maxApi.addHandlers({
 		};
 
 		const reply = await sendToServer(message);
+		await outletReplyDict(reply);
 
 		// Feedback via Max outlet
 		const new_dict = JSON.parse(json);
@@ -252,6 +275,7 @@ maxApi.addHandlers({
 		const message = { "type": "save_logs", "content": "" };
 		try {
 			const reply = await sendToServer(message);
+			await outletReplyDict(reply);
 			if (reply["type"] === "save_logs_done") {
 				console.log("Logs saved:", reply["content"]);
 				await maxApi.outlet("Logs saved");
@@ -276,6 +300,7 @@ maxApi.addHandlers({
 			const message = { "type": "export_sound", "content": args.length ? args[0] : "" };
 			try {
 				const reply = await sendToServer(message);
+				await outletReplyDict(reply);
 				console.log("export_sound logged:", reply);
 				await maxApi.outlet("Export sound logged");
 			} catch (err) {
