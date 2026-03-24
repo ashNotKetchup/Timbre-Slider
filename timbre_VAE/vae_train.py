@@ -128,8 +128,8 @@ def attribute_distance_loss_dimwise_vectorised(mu, x_attr, delta=1.0, eps=1e-8):
     if mu.ndim != 2 or x_attr.ndim != 2:
         raise ValueError("mu and x_attr must be 2D tensors of shape (B, D)")
     # Only compare up to the minimum number of dimensions
-    Dz = torch.abs(mu[:, None, :D] - mu[None, :, :D])
-    Dx = torch.abs(x_attr[:, None, :D] - x_attr[None, :, :D])
+    Dz = mu[:, None, :D] - mu[None, :, :D]
+    Dx = x_attr[:, None, :D] - x_attr[None, :, :D]
     latent_term = torch.tanh(delta * Dz)
     attr_term = torch.sign(Dx + eps)
     loss = torch.abs(latent_term - attr_term).mean()
@@ -140,7 +140,7 @@ def vae_loss(recon_x, x, mu, logvar, x_attr, vae, alpha=1.0, beta=0.1, theta=10.
     loss_fn = nn.MSELoss(reduction='sum')
     recon_loss = loss_fn(recon_x, x)
     kl = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-    attr_loss = attribute_distance_loss_dimwise_vectorised(z, x_attr, delta=1.0)
+    attr_loss = attribute_distance_loss_dimwise_vectorised(mu, x_attr, delta=1.0)
     loss = alpha*recon_loss + beta*kl + theta*attr_loss
     return loss, (recon_loss, kl, attr_loss)
 
@@ -170,9 +170,9 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
         attr_epoch = 0
 
         alpha = 1.0
-        beta = 0.1
+        beta = 0.01
         # Linearly increase theta from 0 to 10.0 over the first half of training
-        max_theta = 10.0
+        max_theta = 1
         warmup_epochs = 0
         if epoch < warmup_epochs:
             theta = max_theta * (epoch / warmup_epochs)
