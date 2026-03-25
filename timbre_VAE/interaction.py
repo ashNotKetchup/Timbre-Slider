@@ -11,7 +11,13 @@ def slider_to_audio(position, audio_sample, sorted_corpus, latent_model, control
         encoding = control_model.model.encode_z(torch.tensor(encoding, dtype=torch.float32))
     interp_latent = encoding + position
     if control_model is not None:
-        interp_latent = control_model.decode(interp_latent)
+        import torch
+        with torch.no_grad():
+            decoded_latent = control_model.decode(interp_latent)
+        from scipy.ndimage import gaussian_filter1d
+        dl_np = decoded_latent.cpu().numpy() if hasattr(decoded_latent, 'cpu') else np.array(decoded_latent)
+        dl_np = gaussian_filter1d(dl_np, sigma=2.0, axis=0) # Smooth latent frames
+        interp_latent = torch.tensor(dl_np) if hasattr(decoded_latent, 'cpu') else dl_np
     recon_audio = latent_model.decode(interp_latent)
     return recon_audio, interp_latent
 

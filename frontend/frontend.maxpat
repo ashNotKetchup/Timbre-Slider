@@ -144,7 +144,7 @@
 					"parameter_enable" : 0,
 					"patching_rect" : [ 222.0, 1970.84635066986084, 198.0, 108.0 ],
 					"presentation" : 1,
-					"presentation_rect" : [ 834.0, 295.0, 530.0, 96.0 ],
+					"presentation_rect" : [ 835.5, 295.0, 529.0, 96.0 ],
 					"setminmax" : [ -3.0, 3.0 ],
 					"setstyle" : 1,
 					"signed" : 1,
@@ -642,7 +642,6 @@
 					"fontsize" : 15.0,
 					"id" : "obj-203",
 					"ignoreclick" : 1,
-					"linecount" : 2,
 					"lines" : 4,
 					"maxclass" : "textedit",
 					"nosymquotes" : 1,
@@ -652,11 +651,10 @@
 					"parameter_enable" : 0,
 					"patching_rect" : [ 244.370881319046021, 1788.079619407653809, 91.0, 17.0 ],
 					"presentation" : 1,
-					"presentation_linecount" : 2,
 					"presentation_rect" : [ 982.0, 256.0, 105.0, 25.0 ],
 					"readonly" : 1,
 					"rounded" : 24.0,
-					"text" : "Spectral Rolloff",
+					"text" : "Pitch",
 					"textcolor" : [ 0.993329346179962, 0.586715519428253, 0.384809076786041, 1.0 ],
 					"textjustification" : 1
 				}
@@ -671,6 +669,7 @@
 					"fontsize" : 15.0,
 					"id" : "obj-207",
 					"ignoreclick" : 1,
+					"linecount" : 2,
 					"lines" : 4,
 					"maxclass" : "textedit",
 					"nosymquotes" : 1,
@@ -680,10 +679,11 @@
 					"parameter_enable" : 0,
 					"patching_rect" : [ 172.185444831848145, 1788.079619407653809, 86.0, 17.0 ],
 					"presentation" : 1,
+					"presentation_linecount" : 2,
 					"presentation_rect" : [ 851.0, 256.0, 99.999998092651367, 35.043482303619385 ],
 					"readonly" : 1,
 					"rounded" : 24.0,
-					"text" : "Pitch",
+					"text" : "Spectral Rolloff",
 					"textcolor" : [ 0.993329346179962, 0.586715519428253, 0.384809076786041, 1.0 ],
 					"textjustification" : 1
 				}
@@ -1778,7 +1778,6 @@
 					"fontsize" : 15.0,
 					"id" : "obj-14",
 					"ignoreclick" : 1,
-					"linecount" : 2,
 					"lines" : 4,
 					"maxclass" : "textedit",
 					"nosymquotes" : 1,
@@ -1788,11 +1787,10 @@
 					"parameter_enable" : 0,
 					"patching_rect" : [ 225.666670203208923, 1745.333385348320007, 91.0, 17.0 ],
 					"presentation" : 1,
-					"presentation_linecount" : 2,
 					"presentation_rect" : [ 982.0, 441.0, 105.0, 25.0 ],
 					"readonly" : 1,
 					"rounded" : 24.0,
-					"text" : "Spectral Rolloff",
+					"text" : "Pitch",
 					"textcolor" : [ 0.993329346179962, 0.586715519428253, 0.384809076786041, 1.0 ],
 					"textjustification" : 1
 				}
@@ -1807,6 +1805,7 @@
 					"fontsize" : 15.0,
 					"id" : "obj-13",
 					"ignoreclick" : 1,
+					"linecount" : 2,
 					"lines" : 4,
 					"maxclass" : "textedit",
 					"nosymquotes" : 1,
@@ -1816,10 +1815,11 @@
 					"parameter_enable" : 0,
 					"patching_rect" : [ 163.000001668930054, 1745.333385348320007, 86.0, 17.0 ],
 					"presentation" : 1,
+					"presentation_linecount" : 2,
 					"presentation_rect" : [ 851.0, 441.0, 99.999998092651367, 32.260877132415771 ],
 					"readonly" : 1,
 					"rounded" : 24.0,
-					"text" : "Pitch",
+					"text" : "Spectral Rolloff",
 					"textcolor" : [ 0.993329346179962, 0.586715519428253, 0.384809076786041, 1.0 ],
 					"textjustification" : 1
 				}
@@ -2642,13 +2642,13 @@
 					"parameter_enable" : 0,
 					"patching_rect" : [ 720.0, 1960.919507503509521, 198.0, 108.0 ],
 					"presentation" : 1,
-					"presentation_rect" : [ 833.0, 475.0, 508.0, 85.0 ],
+					"presentation_rect" : [ 834.0, 475.5, 529.0, 85.0 ],
 					"setminmax" : [ -3.0, 3.0 ],
 					"setstyle" : 1,
 					"signed" : 1,
 					"size" : 4,
 					"slidercolor" : [ 0.988235294117647, 0.584313725490196, 0.388235294117647, 1.0 ],
-					"spacing" : 4
+					"spacing" : 15
 				}
 
 			}
@@ -3060,7 +3060,7 @@
 					"patching_rect" : [ 604.000018000602722, 1385.166679084300995, 240.0, 109.0 ],
 					"presentation" : 1,
 					"presentation_rect" : [ 823.0, 703.0, 533.0, 78.0 ],
-					"size" : 6,
+					"size" : 9,
 					"slidercolor" : [ 0.989521324634552, 0.585809946060181, 0.387364208698273, 1.0 ],
 					"thickness" : 12
 				}
@@ -3575,7 +3575,7 @@
 			}
 , 			{
 				"box" : 				{
-					"addpoints_with_curve" : [ 0.0, 1.0, 0, 0.0, 1.666666666666667, -0.486962646245956, 0, 0.0, 3.333333333333333, -0.205449491739273, 0, 0.0, 4.999999999999999, 0.168209046125412, 0, 0.0, 6.666666666666666, 0.191520899534225, 0, 0.0, 8.333333333333332, 0.142833203077316, 0, 0.0 ],
+					"addpoints_with_curve" : [ 0.0, 1.0, 0, 0.0, 1.111111111111111, 1.0, 0, 0.0, 2.222222222222222, 1.0, 0, 0.0, 3.333333333333333, -0.871794871794872, 0, 0.0, 4.444444444444445, -0.744574427604675, 0, 0.0, 5.555555555555555, -0.564102564102564, 0, 0.0, 6.666666666666666, -0.58974358974359, 0, 0.0, 7.777777777777778, 1.0, 0, 0.0, 8.888888888888889, 1.0, 0, 0.0 ],
 					"bgcolor" : [ 0.925490196078431, 0.972549019607843, 0.972549019607843, 1.0 ],
 					"classic_curve" : 1,
 					"clicksustain" : 0,
@@ -4597,30 +4597,30 @@
 						"vector" : 						{
 							"0" : 							{
 								"label" : "Dimension 1",
-								"data" : [ 1.958964705467224, 0.023911792784929, 0.227117583155632, 0.247961565852165, 0.204992055892944, 0.066941544413567 ]
+								"data" : [ -0.449596136808395, -0.143559366464615, -0.410183668136597, -0.55356502532959, -0.744574427604675, -1.0, -1.0, -1.0, -0.567185819149017 ]
 							}
 ,
 							"1" : 							{
 								"label" : "Dimension 2",
-								"data" : [ 1.621617197990417, -0.326620846986771, 0.506364762783051, 0.409759432077408, -0.108155600726604, -0.48222827911377 ]
+								"data" : [ 0.973578214645386, 0.833363950252533, 0.695759356021881, 0.687138557434082, -0.263521075248718, -1.066767811775208, -1.142073273658752, -1.144778370857239, -0.287156999111176 ]
 							}
 ,
 							"2" : 							{
 								"label" : "Dimension 3",
-								"data" : [ 1.0, -0.486962646245956, -0.205449491739273, 0.168209046125412, 0.191520899534225, 0.142833203077316 ]
+								"data" : [ -0.381241202354431, -0.230804085731506, -0.285303294658661, -0.636429309844971, -0.813261330127716, -0.486410290002823, -0.819069385528564, -1.122025370597839, -0.169085010886192 ]
 							}
 ,
 							"3" : 							{
 								"label" : "Dimension 4",
-								"data" : [ 0.083822190761566, -0.25289249420166, -0.226137116551399, -0.290648698806763, -0.300280690193176, -0.018286019563675 ]
+								"data" : [ 1.0, 1.0, 1.0, -0.871794871794872, -0.744574427604675, -0.564102564102564, -0.58974358974359, 1.0, 1.0 ]
 							}
 
 						}
 ,
 						"text" : "I havent implemented text embeddings yet!",
-						"bias" : [ 3.0, -3.0, 0.0, 0.0 ],
-						"scale" : [ 2.1, -2.1, 0.0, 0.0 ],
-						"metadata_keys" : [ "Pitch", "Spectral Rolloff", "Spectral Centroid", "Spectral Bandwidth" ]
+						"bias" : [ 0.0, -0.375, 0.0, -0.375 ],
+						"scale" : [ 1.0, 1.0, 1.0, 0.670588235294117 ],
+						"metadata_keys" : [ "Spectral Rolloff", "Pitch", "Spectral Centroid", "Spectral Bandwidth" ]
 					}
 ,
 					"id" : "obj-44",
@@ -4835,7 +4835,7 @@
 					"fontname" : "Helvetica Neue",
 					"fontsize" : 20.0,
 					"id" : "obj-34",
-					"items" : [ "Pitch", ",", "Spectral Rolloff", ",", "Spectral Centroid", ",", "Spectral Bandwidth" ],
+					"items" : [ "Spectral Rolloff", ",", "Pitch", ",", "Spectral Centroid", ",", "Spectral Bandwidth" ],
 					"maxclass" : "umenu",
 					"numinlets" : 1,
 					"numoutlets" : 3,
