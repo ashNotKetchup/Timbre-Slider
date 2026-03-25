@@ -3,9 +3,31 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 from itertools import product
-from scipy.signal import resample
+from scipy.interpolate import interp1d
 from tqdm import tqdm
 
+def resample_array(array, target_len, kind='cubic', smooth=False):
+    """Interpolate array to target_len. Avoids ringing artifacts from FFT resampling."""
+    if array.shape[0] == target_len:
+        return array
+    if array.shape[0] == 1:
+        return np.repeat(array, target_len, axis=0)
+    
+    # Fallback to linear if not enough points for cubic
+    if array.shape[0] < 4 and kind == 'cubic':
+        kind = 'linear'
+        
+    x = np.linspace(0, 1, array.shape[0])
+    x_new = np.linspace(0, 1, target_len)
+    f = interp1d(x, array, axis=0, kind=kind)
+    resampled = f(x_new)
+    
+    if smooth and kind == 'cubic':
+        from scipy.ndimage import gaussian_filter1d
+        # Apply a mild low-pass filter to remove jaggedness/zipper noise
+        resampled = gaussian_filter1d(resampled, sigma=2.0, axis=0)
+        
+    return resampled
 
 def prepare_data(sound_data, metadata_keys=None):
         # Prepare latent encodings as training data
@@ -28,23 +50,30 @@ def prepare_data(sound_data, metadata_keys=None):
             enc_len = sound['encoding'].shape[-1] * 4
 
             # Resample latent encoding to new length and append
-            latent_enc = resample(sound['encoding'].squeeze(0).T, enc_len, axis=0)
+            latent_enc = resample_array(sound['encoding'].squeeze(0).T, enc_len)
             latent_encodings.append(latent_enc)
             for key in metadata_keys:
                 # Get feature value (could be scalar or array)
                 val = sound['features_recon'][key]
-                # print(val.shape)
+                # If val is an array of shape (1, T), squeeze it so time is axis=0
+                if isinstance(val, (np.ndarray, torch.Tensor)):
+                    val = np.asarray(val)
+                    if val.ndim == 2 and val.shape[0] == 1:
+                        val = val.squeeze(0)
+                        
                 # If scalar, make it a constant vector; if array, resample to enc_len
-                if np.isscalar(val):
-                    vec = np.full(enc_len, val)
+                if np.isscalar(val) or (isinstance(val, np.ndarray) and val.ndim == 0):
+                    vec = np.full((enc_len,), float(val))
                 else:
-                    vec = resample(val, enc_len, axis=-1)
+                    vec = resample_array(val, enc_len)
 
-                features.append(vec)  # Each vec is (296, 1)
-                # After collecting all features, stack and transpose to (296, 5)
-                features_stacked = np.stack(features, axis=-1)  # (296, 5)
-            # Stack features into shape (num_features, enc_len)
-            features_stacked = np.stack(features, axis=-1).squeeze()
+                # Ensure vec is (enc_len, 1) for reliable stacking
+                if vec.ndim == 1:
+                    vec = vec[:, None]
+                features.append(vec)
+            
+            # Stack features into shape (enc_len, num_features)
+            features_stacked = np.concatenate(features, axis=-1)
             metadata_vectors.append(features_stacked)
 
         # metadata_vectors: list of arrays, each (num_features, enc_len)
@@ -53,10 +82,22 @@ def prepare_data(sound_data, metadata_keys=None):
 
         print(f'[data] {len(latent_encodings)} encodings, shape {latent_encodings[0].shape}')
         latent_data = np.concatenate(latent_encodings, axis=0)  # shape: (total_time, dim)
+        
+        # Standardise the latent dataset to mean 0, std 1
+        latent_mean = np.mean(latent_data, axis=0, keepdims=True)
+        latent_std = np.std(latent_data, axis=0, keepdims=True) + 1e-8
+        latent_data = (latent_data - latent_mean) / latent_std
         latent_data = torch.tensor(latent_data, dtype=torch.float32)
 
+        # Standardise metadata elements to mean 0, std 1
+        metadata_concat = np.concatenate(metadata_vectors, axis=0)
+        meta_mean = np.mean(metadata_concat, axis=0, keepdims=True)
+        meta_std = np.std(metadata_concat, axis=0, keepdims=True) + 1e-8
+        for i in range(len(metadata_vectors)):
+            metadata_vectors[i] = (metadata_vectors[i] - meta_mean) / meta_std
+
         input_dim = latent_data.shape[1]
-        latent_dim = len(metadata_keys)  # Number of metadata features
+        latent_dim = len(metadata_keys) + 4  # Number of metadata features
 
         return latent_data, metadata_vectors, metadata_keys, input_dim, latent_dim
 
@@ -65,19 +106,23 @@ class VAE(nn.Module):
     def __init__(self, input_dim, latent_dim):
         super().__init__()
         self.encoder = nn.Sequential(
-            nn.Linear(input_dim, 32),
-            nn.ReLU(),
-            nn.Linear(32, 16),
-            nn.ReLU(),
+            nn.Linear(input_dim, 128),
+            nn.LayerNorm(128),
+            nn.SiLU(),
+            nn.Linear(128, 64),
+            nn.LayerNorm(64),
+            nn.SiLU(),
         )
-        self.fc_mu = nn.Linear(16, latent_dim)
-        self.fc_logvar = nn.Linear(16, latent_dim)
+        self.fc_mu = nn.Linear(64, latent_dim)
+        self.fc_logvar = nn.Linear(64, latent_dim)
         self.decoder = nn.Sequential(
-            nn.Linear(latent_dim, 16),
-            nn.ReLU(),
-            nn.Linear(16, 32),
-            nn.ReLU(),
-            nn.Linear(32, input_dim)
+            nn.Linear(latent_dim, 64),
+            nn.LayerNorm(64),
+            nn.SiLU(),
+            nn.Linear(64, 128),
+            nn.LayerNorm(128),
+            nn.SiLU(),
+            nn.Linear(128, input_dim)
         )
         self.input_dim = input_dim
         self.latent_dim = latent_dim
@@ -111,7 +156,7 @@ class VAE(nn.Module):
 
 def attribute_distance_loss_dimwise_vectorised(mu, x_attr, delta=1.0, eps=1e-8):
     """
-    Vectorised dimension-wise attribute regularisation.
+    Vectorised dimension-wise attribute regularisation. Based on Pati and Lerch
 
     Args:
         mu: Latent samples, shape (B, D_mu)
@@ -135,18 +180,19 @@ def attribute_distance_loss_dimwise_vectorised(mu, x_attr, delta=1.0, eps=1e-8):
     loss = torch.abs(latent_term - attr_term).mean()
     return loss
 
-def vae_loss(recon_x, x, mu, logvar, x_attr, vae, alpha=1.0, beta=0.1, theta=10.0):
+def vae_loss(recon_x, x, mu, logvar, x_attr, vae, alpha=5.0, beta=0.1, theta=10.0):
     z = vae.reparameterize(mu, logvar)
-    loss_fn = nn.MSELoss(reduction='sum')
+    loss_fn = nn.MSELoss(reduction='mean')
     recon_loss = loss_fn(recon_x, x)
-    kl = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+    # Scale KL down because MSE is using mean now (mean over batch and features)
+    kl = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
     attr_loss = attribute_distance_loss_dimwise_vectorised(mu, x_attr, delta=1.0)
     loss = alpha*recon_loss + beta*kl + theta*attr_loss
     return loss, (recon_loss, kl, attr_loss)
 
-def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=256, learning_rate=1e-4):
+def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=256, learning_rate=1e-3, plot_loss=False):
     optimizer = optim.Adam(vae.parameters(), lr=learning_rate)
-    loss_fn = nn.MSELoss(reduction='sum')
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
     loss_history = []
     vae.train()
     epochs = num_epochs
@@ -162,6 +208,11 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
     kl_loss_history = []
     attr_loss_history = []
 
+    if plot_loss:
+        import matplotlib.pyplot as plt
+        plt.ion()  # Turn on interactive mode
+        fig, ax = plt.subplots(figsize=(8, 5))
+        
     for epoch in tqdm(range(epochs), desc="Training VAE", unit="epoch", ncols=80):
         perm = torch.randperm(latent_data.size(0))
         total_loss = 0
@@ -169,15 +220,23 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
         kl_epoch = 0
         attr_epoch = 0
 
-        alpha = 1.0
-        beta = 0.01
-        # Linearly increase theta from 0 to 10.0 over the first half of training
-        max_theta = 1
-        warmup_epochs = 0
-        if epoch < warmup_epochs:
-            theta = max_theta * (epoch / warmup_epochs)
+        alpha = 5.0
+        
+        # Cyclic/monotonic KL annealing
+        beta_max = 0.005
+        kl_warmup_epochs = epochs // 3
+        if epoch < kl_warmup_epochs:
+            beta = beta_max * (epoch / max(1, kl_warmup_epochs))
         else:
-            theta = max_theta
+            beta = beta_max
+
+        # Attribute loss warmup
+        max_theta = 10.0
+        attr_warmup_epochs = epochs // 4
+        if epoch < attr_warmup_epochs:
+            theta = 0.0
+        else:
+            theta = max_theta * min(1.0, (epoch - attr_warmup_epochs) / max(1, epochs // 6))
 
         for i in range(0, latent_data.size(0), batch_size):
             idx = perm[i:i+batch_size]
@@ -192,10 +251,31 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
             recon_epoch += recon_loss.item()
             kl_epoch += kl.item()
             attr_epoch += attr_loss.item()
+            
+        scheduler.step()
         total_loss_history.append(total_loss)
         recon_loss_history.append(recon_epoch)
         kl_loss_history.append(kl_epoch)
         attr_loss_history.append(attr_epoch)
+
+        if plot_loss and (epoch % 5 == 0 or epoch == epochs - 1):
+            ax.clear()
+            ax.set_title("VAE Training Loss")
+            ax.plot(total_loss_history, label='Total Loss', color='black', linewidth=2)
+            ax.plot(recon_loss_history, label='Recon Loss', color='blue', alpha=0.7)
+            ax.plot(kl_loss_history, label='KL Loss', color='red', alpha=0.7)
+            ax.plot(attr_loss_history, label='Attr Loss', color='green', alpha=0.7)
+            ax.set_yscale('log')
+            ax.set_xlabel('Epoch')
+            ax.set_ylabel('Loss (Log Scale)')
+            ax.legend(loc='upper right')
+            plt.draw()
+            plt.pause(0.001)
+
+    if plot_loss:
+        plt.ioff()
+        # Optional: let the user see the final plot before it gets destroyed, or just keep it closed:
+        plt.show() 
 
     loss_lists = [total_loss_history, recon_loss_history, kl_loss_history, attr_loss_history]
     labels = ['Total Loss', 'Recon Loss', 'KL Loss', 'Attr Loss']

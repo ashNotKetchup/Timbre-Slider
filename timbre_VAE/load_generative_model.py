@@ -174,7 +174,7 @@ class Model:
             print(f"[model] Control-encoded: {latent_vector.shape}")
         return latent_vector, latent_text
 
-    def decode(self, latent_vector:np.ndarray, latent_text:str='', use_text:bool=False) -> np.ndarray:
+    def decode(self, latent_vector:np.ndarray, latent_text:str='', use_text:bool=False, smoothness:float=2.0) -> np.ndarray:
         """
         Decode a latent representation into audio
 
@@ -186,7 +186,17 @@ class Model:
         """
         # Optionally decode with VAE (control model)
         if self.control_model is not None:
-            latent_vector = self.control_model.decode(torch.tensor(latent_vector.squeeze(0).T))
+            latent_vector_tensor = torch.tensor(latent_vector.squeeze(0).T)
+            # Use no_grad here since we don't need gradients for inference
+            with torch.no_grad():
+                decoded_latent = self.control_model.decode(latent_vector_tensor)
+            lv_np = decoded_latent.cpu().numpy() if hasattr(decoded_latent, "cpu") else np.array(decoded_latent)
+            # Smooth the output latent sequences to remove jaggedness/rolling sounds
+            # from scipy.ndimage import gaussian_filter1d
+            # Apply low-pass filter over the time dimension (axis=0)
+            # lv_np = gaussian_filter1d(lv_np, sigma=smoothness, axis=0)
+            latent_vector = lv_np
+        
         
         
         # Try both transpositions for latent_vector to torch.Tensor
