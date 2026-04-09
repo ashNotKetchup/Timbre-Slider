@@ -1,8 +1,8 @@
 # MALT (Manipulating Audio with Latent Timbre)
 
-Example- and semantic-driven timbre interpolation in latent space. Adapted from the [Slider project](https://www.eca.ed.ac.uk/) at the University of Edinburgh.
+Example- and semantic-driven timbre interpolation in latent space. 
 
-MALT encodes audio into a neural latent space (via RAVE or Stable Audio Open 1.0), extracts perceptual timbre features, trains a lightweight VAE to learn a control subspace, and exposes interactive sliders — in a Jupyter notebook or a Max/MSP frontend — to manipulate timbral qualities in real time.
+MALT encodes audio into a neural latent space (via RAVE or Stable Audio Open 1.0), extracts perceptual timbre features, trains a lightweight VAE to learn a control subspace, and exposes interactive sliders — in a Jupyter notebook or a Max/MSP frontend — to manipulate timbral qualities of samples.
 
 ## Prerequisites
 
