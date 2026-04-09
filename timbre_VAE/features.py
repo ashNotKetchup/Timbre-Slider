@@ -45,101 +45,193 @@ def get_pitch(y, sr):
 def batch_compute_features(sound_files, root_folder='sounds', use_recon=True, model=None, use_mean=False, feature_type='raw_features', pca_dim=4, pca=None):
     '''
     Compute audio features for a batch of sound files.
-    If feature_type == 'PCA', fit PCA on all encodings and use PCA dimensions as features.
+    If 'PCA' or 'pca' is in feature_type, fit PCA on all encodings and use PCA dimensions as features.
     Returns a list of dictionaries with audio data, encodings, and features for each sound file.
+    If feature_type is a list, returns dictionaries of these outputs mapped by feature type.
     '''
-    audio_features_list = []
+    feature_types = feature_type if isinstance(feature_type, list) else [feature_type]
+    audio_features_lists = {ft: [] for ft in feature_types}
+
+    for ft in feature_types:
+        if ft not in ['raw_features', 'audio_commons', 'PCA', 'pca']:
+            raise ValueError(f"Unsupported feature_type: {ft}")
 
     for sound_file in tqdm(sound_files, desc="Computing features", unit="file", ncols=80):
         path = os.path.join(root_folder, sound_file)
         if use_recon and model is None:
             raise ValueError("Model must be provided if use_recon is True.")
-        if feature_type not in ['raw_features', 'audio_commons', 'PCA', 'pca']:
-            raise ValueError(f"Unsupported feature_type: {feature_type}")
 
         y, sr = li.load(path, sr=None)
         with torch.no_grad():
             enc = model.encode(y)[0]
             y_recon = model.decode(enc) if use_recon else None
 
-        if feature_type == 'raw_features' or feature_type == 'pca':
-            features = {
-                'spectral_centroid': (li.feature.spectral_centroid(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_centroid(y=y_recon, sr=sr)),
-                'spectral_flatness': (li.feature.spectral_flatness(y=y_recon).mean() if use_mean else li.feature.spectral_flatness(y=y_recon)),
-                'zero_crossing_rate': (li.feature.zero_crossing_rate(y_recon).mean() if use_mean else li.feature.zero_crossing_rate(y_recon)),
-                'loudness': (li.feature.rms(y=y_recon).mean() if use_mean else li.feature.rms(y=y_recon)),
-                'pitch': get_pitch(y_recon, sr),
-                'spectral_bandwidth': (li.feature.spectral_bandwidth(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_bandwidth(y=y_recon, sr=sr)),
-                'spectral_rolloff': (li.feature.spectral_rolloff(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_rolloff(y=y_recon, sr=sr)),
-                'spectral_contrast': (li.feature.spectral_contrast(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_contrast(y=y_recon, sr=sr)),
-            }
-        elif feature_type == 'audio_commons':
-            features_all = timbral_models.timbral_extractor(y_recon, sr, verbose=False)
-            features = {k: features_all[k] for k in ['hardness', 'warmth', 'depth', 'brightness', 'roughness', 'sharpness', 'boominess'] if k in features_all}
-        
-
-        try:
-            audio_features_list.append(
-                {
-                    'filename': sound_file,
-                    'focus': False,
-                    'raw_audio': y,
-                    'recon_audio': y_recon,
-                    'sr': sr,
-                    'encoding': enc,
-                    'encoding_mean': enc.mean(axis=-1),
-                    'encoding_std': enc.std(axis=-1),
-                    'features_recon': features
+        for ft in feature_types:
+            if ft == 'raw_features' or ft == 'pca' or ft == 'PCA':
+                features = {
+                    'spectral_centroid': (li.feature.spectral_centroid(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_centroid(y=y_recon, sr=sr)),
+                    'spectral_flatness': (li.feature.spectral_flatness(y=y_recon).mean() if use_mean else li.feature.spectral_flatness(y=y_recon)),
+                    'zero_crossing_rate': (li.feature.zero_crossing_rate(y_recon).mean() if use_mean else li.feature.zero_crossing_rate(y_recon)),
+                    'loudness': (li.feature.rms(y=y_recon).mean() if use_mean else li.feature.rms(y=y_recon)),
+                    'pitch': get_pitch(y_recon, sr),
+                    'spectral_bandwidth': (li.feature.spectral_bandwidth(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_bandwidth(y=y_recon, sr=sr)),
+                    'spectral_rolloff': (li.feature.spectral_rolloff(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_rolloff(y=y_recon, sr=sr)),
+                    'spectral_contrast': (li.feature.spectral_contrast(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_contrast(y=y_recon, sr=sr)),
                 }
-            )
-        except Exception as e:
-            print(f"[features] ✗ {sound_file}: {e}")
+            elif ft == 'audio_commons':
+                features_all = timbral_models.timbral_extractor(y_recon, sr, verbose=False)
+                features = {k: features_all[k] for k in ['hardness', 'warmth', 'depth', 'brightness', 'roughness', 'sharpness', 'boominess'] if k in features_all}
+            else:
+                features = {}
+            
+            try:
+                audio_features_lists[ft].append(
+                    {
+                        'filename': sound_file,
+                        'focus': False,
+                        'raw_audio': y,
+                        'recon_audio': y_recon,
+                        'sr': sr,
+                        'encoding': enc,
+                        'encoding_mean': enc.mean(axis=-1),
+                        'encoding_std': enc.std(axis=-1),
+                        'features_recon': features
+                    }
+                )
+            except Exception as e:
+                print(f"[features] ✗ {sound_file}: {e}")
 
-    if feature_type == 'PCA' or feature_type == 'pca':
-        key_features, _, pca = pca_attributes(audio_features_list, 'features_recon')
+    key_features_dict = {}
+    pca_dict = {}
+    
+    for ft in feature_types:
+        if ft == 'PCA' or ft == 'pca':
+            kf, _, p = pca_attributes(audio_features_lists[ft], 'features_recon')
+            key_features_dict[ft] = kf
+            pca_dict[ft] = p
+        else:
+            kf, _ = filter_attributes(audio_features_lists[ft], 'features_recon')
+            key_features_dict[ft] = kf
+            pca_dict[ft] = None
+
+    print(f"[features] Processed {len(sound_files)} files for types: {', '.join(feature_types)}")
+    
+    if isinstance(feature_type, list):
+        return audio_features_lists, key_features_dict, pca_dict
     else:
-        key_features, _ = filter_attributes(audio_features_list, 'features_recon')
-    print(f"[features] Processed {len(audio_features_list)} files")
-    return audio_features_list, key_features, pca
+        return audio_features_lists[feature_type], key_features_dict[feature_type], pca_dict[feature_type]
 
 
 def get_features(sound_files, feature_type, model=None, save_path=None, overwrite=False, root_folder = None):
+    feature_types = feature_type if isinstance(feature_type, list) else [feature_type]
+    
     if save_path:
-        save_path += '.pkl' if not save_path.endswith('.pkl') else ''
-        key_features_path = save_path.replace('.pkl', '_key_features.pkl')
-        pca_path = save_path.replace('.pkl', '_pca.pkl')
+        if not isinstance(feature_type, list):
+            # Single feature mode checking cache
+            save_path_ext = save_path + ('.pkl' if not save_path.endswith('.pkl') else '')
+            key_features_path = save_path_ext.replace('.pkl', '_key_features.pkl')
+            pca_path = save_path_ext.replace('.pkl', '_pca.pkl')
 
-        # Try loading cached data
-        if os.path.exists(save_path) and not overwrite:
-            with open(save_path, 'rb') as f:
-                sound_data = pickle.load(f)
-            # Load PCA if available
-            pca = None
-            if os.path.exists(pca_path):
-                with open(pca_path, 'rb') as pf:
-                    pca = pickle.load(pf)
-            # Load key_features if available
-            if os.path.exists(key_features_path):
-                with open(key_features_path, 'rb') as kf:
-                    key_features = pickle.load(kf)
+            # Try loading cached data
+            if os.path.exists(save_path_ext) and not overwrite:
+                with open(save_path_ext, 'rb') as f:
+                    sound_data = pickle.load(f)
+                # Load PCA if available
+                pca = None
+                if os.path.exists(pca_path):
+                    with open(pca_path, 'rb') as pf:
+                        pca = pickle.load(pf)
+                # Load key_features if available
+                if os.path.exists(key_features_path):
+                    with open(key_features_path, 'rb') as kf:
+                        key_features = pickle.load(kf)
+                else:
+                    key_features, _ = filter_attributes(sound_data, 'features_recon')
+                    with open(key_features_path, 'wb') as kf:
+                        pickle.dump(key_features, kf)
+                print(f'[features] Loaded cached data from {os.path.basename(save_path_ext)}')
+                return sound_data, key_features, pca
+        else:
+            # Batch mode checking cache
+            # Determine which ones need computing
+            missing_types = []
+            cached_sound_data = {}
+            cached_key_features = {}
+            cached_pca = {}
+            
+            if not overwrite:
+                for ft in feature_types:
+                    sp = f"{save_path}_{ft}_preprocessed_sound_data.pkl"
+                    kfp = sp.replace('.pkl', '_key_features.pkl')
+                    pp = sp.replace('.pkl', '_pca.pkl')
+                    
+                    if os.path.exists(sp):
+                        with open(sp, 'rb') as f:
+                            cached_sound_data[ft] = pickle.load(f)
+                        
+                        if os.path.exists(kfp):
+                            with open(kfp, 'rb') as kf:
+                                cached_key_features[ft] = pickle.load(kf)
+                        else:
+                            cached_key_features[ft], _ = filter_attributes(cached_sound_data[ft], 'features_recon')
+                        
+                        if os.path.exists(pp):
+                            with open(pp, 'rb') as pf:
+                                cached_pca[ft] = pickle.load(pf)
+                        else:
+                            cached_pca[ft] = None
+                    else:
+                        missing_types.append(ft)
             else:
-                key_features, _ = filter_attributes(sound_data, 'features_recon')
-                with open(key_features_path, 'wb') as kf:
-                    pickle.dump(key_features, kf)
-            print(f'[features] Loaded cached data from {os.path.basename(save_path)}')
-            return sound_data, key_features, pca
+                missing_types = feature_types
+            
+            # If nothing is missing, return cached
+            if not missing_types:
+                print(f'[features] Loaded all cached data for types: {feature_types}')
+                return cached_sound_data, cached_key_features, cached_pca
+            
+            # Since some are missing, we just fallback to computing the missing types
+            feature_types = missing_types
 
     # Compute features and save if needed
-    sound_data, key_features, pca = batch_compute_features(sound_files, use_recon=True, model=model, feature_type=feature_type, root_folder=root_folder)
+    sound_data, key_features, pca = batch_compute_features(sound_files, use_recon=True, model=model, feature_type=feature_types, root_folder=root_folder)
+    
     if save_path:
-        with open(save_path, 'wb') as f:
-            pickle.dump(sound_data, f)
-        with open(key_features_path, 'wb') as kf:
-            pickle.dump(key_features, kf)
-        if pca is not None:
-            with open(pca_path, 'wb') as pf:
-                pickle.dump(pca, pf)
-        print(f'[features] Saved to {os.path.basename(save_path)}')
+        if isinstance(feature_type, list):
+            for ft in feature_types:
+                sp = f"{save_path}_{ft}_preprocessed_sound_data.pkl"
+                kfp = sp.replace('.pkl', '_key_features.pkl')
+                pp = sp.replace('.pkl', '_pca.pkl')
+
+                with open(sp, 'wb') as f:
+                    pickle.dump(sound_data[ft], f)
+                with open(kfp, 'wb') as kf:
+                    pickle.dump(key_features[ft], kf)
+                if pca[ft] is not None:
+                    with open(pp, 'wb') as pf:
+                        pickle.dump(pca[ft], pf)
+            print(f'[features] Saved multiple types to base path {os.path.basename(save_path)}')
+            
+            # If some were cached and some computed, combine them
+            if not overwrite and 'cached_sound_data' in locals():
+                for ft in cached_sound_data:
+                    sound_data[ft] = cached_sound_data[ft]
+                    key_features[ft] = cached_key_features[ft]
+                    pca[ft] = cached_pca[ft]
+                # the result uses the full original list of types
+        else:
+            save_path_ext = save_path + ('.pkl' if not save_path.endswith('.pkl') else '')
+            with open(save_path_ext, 'wb') as f:
+                pickle.dump(sound_data, f)
+            key_features_path = save_path_ext.replace('.pkl', '_key_features.pkl')
+            pca_path = save_path_ext.replace('.pkl', '_pca.pkl')
+            with open(key_features_path, 'wb') as kf:
+                pickle.dump(key_features, kf)
+            if pca is not None:
+                with open(pca_path, 'wb') as pf:
+                    pickle.dump(pca, pf)
+            print(f'[features] Saved to {os.path.basename(save_path_ext)}')
+            
     return sound_data, key_features, pca
 
 
