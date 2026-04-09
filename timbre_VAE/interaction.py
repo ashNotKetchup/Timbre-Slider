@@ -12,6 +12,7 @@ def slider_to_audio(position, audio_sample, sorted_corpus, latent_model, control
     interp_latent = encoding + position
     if control_model is not None:
         interp_latent = control_model.decode(interp_latent)
+
     recon_audio = latent_model.decode(interp_latent)
     return recon_audio, interp_latent
 

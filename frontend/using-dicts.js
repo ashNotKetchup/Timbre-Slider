@@ -107,9 +107,9 @@ const emitClientStatus = async (isAwaiting) => {
 	}
 };
 
-const sendToServer = async (message, timeoutMs = 300000) => {	
+const sendToServer = async (message, timeoutMs = null) => {	
 	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(), timeoutMs);
+	const timer = timeoutMs !== null ? setTimeout(() => controller.abort(), timeoutMs) : null;
 	await emitClientStatus(true);
 	try {
 		const res = await fetch(URL, {
@@ -130,7 +130,7 @@ const sendToServer = async (message, timeoutMs = 300000) => {
 		}
 		throw err;
 	} finally {
-		clearTimeout(timer);
+		if (timer) clearTimeout(timer);
 		await emitClientStatus(false);
 	}
 };
