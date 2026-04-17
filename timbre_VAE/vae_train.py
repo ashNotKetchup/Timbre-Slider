@@ -29,7 +29,7 @@ def resample_array(array, target_len, kind='cubic', smooth=False):
         
     return resampled
 
-def prepare_data(sound_data, metadata_keys=None):
+def prepare_data(sound_data, metadata_keys=None, resolution_multiplier=4):
         # Prepare latent encodings as training data
         # latent_encodings = [sound['encoding'].squeeze(0).T for sound in sound_data]  # shape: (time, dim)
         print(f"[data] Preparing {len(sound_data)} items …")
@@ -47,7 +47,7 @@ def prepare_data(sound_data, metadata_keys=None):
             # Collect latent encoding for this item
 
             # (optional) Double the encoding length (resolution) for metadata and latent encoding
-            enc_len = sound['encoding'].shape[-1] * 4
+            enc_len = sound['encoding'].shape[-1] * resolution_multiplier
 
             # Resample latent encoding to new length and append
             latent_enc = resample_array(sound['encoding'].squeeze(0).T, enc_len)
@@ -97,7 +97,7 @@ def prepare_data(sound_data, metadata_keys=None):
             metadata_vectors[i] = (metadata_vectors[i] - meta_mean) / meta_std
 
         input_dim = latent_data.shape[1]
-        latent_dim = len(metadata_keys) #+ 4  # Number of metadata features
+        latent_dim = len(metadata_keys) + 24  # Number of metadata features
 
         return latent_data, metadata_vectors, metadata_keys, input_dim, latent_dim
 
@@ -144,6 +144,13 @@ class VAE(nn.Module):
             """
             mu, logvar = self.encode(x)
             return self.reparameterize(mu, logvar)
+    
+    def encode_mu(self, x):
+            """
+            Returns the mean vector mu given input x. used for inference and control, where we want a deterministic encoding without sampling noise.
+            """
+            mu, logvar = self.encode(x)
+            return mu
 
     def decode(self, z):
         return self.decoder(z)
@@ -180,7 +187,7 @@ def attribute_distance_loss_dimwise_vectorised(mu, x_attr, delta=1.0, eps=1e-8):
     loss = torch.abs(latent_term - attr_term).mean()
     return loss
 
-def vae_loss(recon_x, x, mu, logvar, x_attr, vae, alpha=1.0, beta=0.1, theta=10.0):
+def vae_loss(recon_x, x, mu, logvar, x_attr, vae, alpha=1.0, beta=0, theta=0): #alpha=1.0, beta=0.1, theta=10.0
     z = vae.reparameterize(mu, logvar)
     loss_fn = nn.MSELoss(reduction='mean')
     recon_loss = loss_fn(recon_x, x)

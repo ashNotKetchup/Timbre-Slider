@@ -83,6 +83,7 @@ class Model:
                                                                     model_half=False,
                                                                     skip_bottleneck=True,
                                                                     device=self.device)
+            # print(model_config)
 
             sr = model_config.get('sample_rate', '?')
             ldim = model_config['model']['pretransform']['config'].get('latent_dim', '?')
@@ -168,7 +169,7 @@ class Model:
             # Optionally encode with VAE (control model)
             latent_vector_flat = latent_vector.squeeze(0).T if latent_vector.ndim == 3 else latent_vector
             with torch.no_grad():
-                vae_z = self.control_model.encode_z(torch.from_numpy(latent_vector_flat))
+                vae_z = self.control_model.encode_mu(torch.from_numpy(latent_vector_flat))
             latent_vector = vae_z.T[np.newaxis, ...]  # reshape back to (1, latent_dim) for consistency
             latent_vector = latent_vector.cpu().numpy() if hasattr(latent_vector, "cpu") else np.array(latent_vector)
             print(f"[model] Control-encoded: {latent_vector.shape}")

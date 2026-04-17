@@ -262,6 +262,7 @@ def handle_request_latent(message):
 def handle_request_audio(message):
     global audio_path
     latent_data = message['content']
+    # print(latent_data.keys())
     print("[decode] Received latent data")
     try:
         if timbre_gen_model is None or timbre_gen_model.control_model is None:
@@ -290,8 +291,14 @@ def handle_request_audio(message):
 
         # Ensure bias/scale match the number of latent dims
         n_latent = latent_vector.shape[1]
+        
+        if len(bias) < n_latent:
+            bias = np.pad(bias, (0, n_latent - len(bias)), constant_values=0)
+            scale = np.pad(scale, (0, n_latent - len(scale)), constant_values=1)
+            
         bias = bias[:n_latent].reshape(1, n_latent, 1)
         scale = scale[:n_latent].reshape(1, n_latent, 1)
+        
         latent_vector_scaled = latent_vector * scale + bias
         audio_out = timbre_gen_model.decode(latent_vector_scaled, latent_text)
         print("[decode] Done")
