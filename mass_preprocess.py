@@ -17,25 +17,29 @@ def mass_preprocess(sample_folder, model_name='nasa', model_type='STABLE_AUDIO',
         if f.endswith(('.wav', '.aif', '.mp3', '.ogg'))
     ]
     results = {}
-    for feature_type in feature_types:
-        # PCA is computed on-the-fly from raw_features, so skip a separate cache
-        if feature_type in ('pca', 'PCA'):
-            continue
-        feature_save_path = os.path.join(
+    
+    compute_types = [t for t in feature_types if t not in ('pca', 'PCA')]
+    if compute_types:
+        feature_save_base = os.path.join(
             sample_folder,
-            f"{os.path.basename(sample_folder)}_{model_type}_{feature_type}_preprocessed_sound_data.pkl",
+            f"{os.path.basename(sample_folder)}_{model_type}"
         )
-        print(f'[preprocess] {len(sound_files)} files × {feature_type} in {os.path.basename(sample_folder)}')
+        print(f'[preprocess] {len(sound_files)} files × {compute_types} in {os.path.basename(sample_folder)}')
+        
         get_features(
             sound_files,
-            feature_type,
+            compute_types,
             model=model,
-            save_path=feature_save_path,
+            save_path=feature_save_base,
             overwrite=overwrite,
             root_folder=sample_folder
         )
-        print(f'[preprocess] Saved → {os.path.basename(feature_save_path)}')
-        results[feature_type] = feature_save_path
+
+        for feature_type in compute_types:
+            feature_save_path = f"{feature_save_base}_{feature_type}_preprocessed_sound_data.pkl"
+            print(f'[preprocess] Saved/Available → {os.path.basename(feature_save_path)}')
+            results[feature_type] = feature_save_path
+
     # PCA reuses the raw_features cache
     if 'raw_features' in results:
         results['pca'] = results['raw_features']

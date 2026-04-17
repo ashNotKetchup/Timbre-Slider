@@ -180,7 +180,7 @@ def attribute_distance_loss_dimwise_vectorised(mu, x_attr, delta=1.0, eps=1e-8):
     loss = torch.abs(latent_term - attr_term).mean()
     return loss
 
-def vae_loss(recon_x, x, mu, logvar, x_attr, vae, alpha=5.0, beta=0.1, theta=10.0):
+def vae_loss(recon_x, x, mu, logvar, x_attr, vae, alpha=1.0, beta=0.1, theta=10.0):
     z = vae.reparameterize(mu, logvar)
     loss_fn = nn.MSELoss(reduction='mean')
     recon_loss = loss_fn(recon_x, x)
@@ -220,7 +220,7 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
         kl_epoch = 0
         attr_epoch = 0
 
-        alpha = 5.0
+        alpha = 2.0
         
         # Cyclic/monotonic KL annealing
         beta_max = 0.005
