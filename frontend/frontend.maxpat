@@ -128,8 +128,7 @@
 					"presentation" : 1,
 					"presentation_rect" : [ 833.333384990692139, 375.490219354629517, 69.0, 16.0 ],
 					"text" : "Distribution Limit",
-					"textcolor" : [ 0.592156862745098, 0.662745098039216, 0.741176470588235, 1.0 ],
-					"textjustification" : 0
+					"textcolor" : [ 0.592156862745098, 0.662745098039216, 0.741176470588235, 1.0 ]
 				}
 
 			}
@@ -642,6 +641,7 @@
 					"fontsize" : 15.0,
 					"id" : "obj-203",
 					"ignoreclick" : 1,
+					"linecount" : 2,
 					"lines" : 4,
 					"maxclass" : "textedit",
 					"nosymquotes" : 1,
@@ -651,10 +651,11 @@
 					"parameter_enable" : 0,
 					"patching_rect" : [ 244.370881319046021, 1788.079619407653809, 91.0, 17.0 ],
 					"presentation" : 1,
+					"presentation_linecount" : 2,
 					"presentation_rect" : [ 982.0, 256.0, 105.0, 25.0 ],
 					"readonly" : 1,
 					"rounded" : 24.0,
-					"text" : "Pitch",
+					"text" : "Spectral Rolloff",
 					"textcolor" : [ 0.993329346179962, 0.586715519428253, 0.384809076786041, 1.0 ],
 					"textjustification" : 1
 				}
@@ -669,7 +670,6 @@
 					"fontsize" : 15.0,
 					"id" : "obj-207",
 					"ignoreclick" : 1,
-					"linecount" : 2,
 					"lines" : 4,
 					"maxclass" : "textedit",
 					"nosymquotes" : 1,
@@ -679,11 +679,10 @@
 					"parameter_enable" : 0,
 					"patching_rect" : [ 172.185444831848145, 1788.079619407653809, 86.0, 17.0 ],
 					"presentation" : 1,
-					"presentation_linecount" : 2,
 					"presentation_rect" : [ 851.0, 256.0, 99.999998092651367, 35.043482303619385 ],
 					"readonly" : 1,
 					"rounded" : 24.0,
-					"text" : "Spectral Rolloff",
+					"text" : "Pitch",
 					"textcolor" : [ 0.993329346179962, 0.586715519428253, 0.384809076786041, 1.0 ],
 					"textjustification" : 1
 				}
@@ -1778,6 +1777,7 @@
 					"fontsize" : 15.0,
 					"id" : "obj-14",
 					"ignoreclick" : 1,
+					"linecount" : 2,
 					"lines" : 4,
 					"maxclass" : "textedit",
 					"nosymquotes" : 1,
@@ -1787,10 +1787,11 @@
 					"parameter_enable" : 0,
 					"patching_rect" : [ 225.666670203208923, 1745.333385348320007, 91.0, 17.0 ],
 					"presentation" : 1,
+					"presentation_linecount" : 2,
 					"presentation_rect" : [ 982.0, 441.0, 105.0, 25.0 ],
 					"readonly" : 1,
 					"rounded" : 24.0,
-					"text" : "Pitch",
+					"text" : "Spectral Rolloff",
 					"textcolor" : [ 0.993329346179962, 0.586715519428253, 0.384809076786041, 1.0 ],
 					"textjustification" : 1
 				}
@@ -1805,7 +1806,6 @@
 					"fontsize" : 15.0,
 					"id" : "obj-13",
 					"ignoreclick" : 1,
-					"linecount" : 2,
 					"lines" : 4,
 					"maxclass" : "textedit",
 					"nosymquotes" : 1,
@@ -1815,11 +1815,10 @@
 					"parameter_enable" : 0,
 					"patching_rect" : [ 163.000001668930054, 1745.333385348320007, 86.0, 17.0 ],
 					"presentation" : 1,
-					"presentation_linecount" : 2,
 					"presentation_rect" : [ 851.0, 441.0, 99.999998092651367, 32.260877132415771 ],
 					"readonly" : 1,
 					"rounded" : 24.0,
-					"text" : "Spectral Rolloff",
+					"text" : "Pitch",
 					"textcolor" : [ 0.993329346179962, 0.586715519428253, 0.384809076786041, 1.0 ],
 					"textjustification" : 1
 				}
@@ -3060,7 +3059,7 @@
 					"patching_rect" : [ 604.000018000602722, 1385.166679084300995, 240.0, 109.0 ],
 					"presentation" : 1,
 					"presentation_rect" : [ 823.0, 703.0, 533.0, 78.0 ],
-					"size" : 9,
+					"size" : 5,
 					"slidercolor" : [ 0.989521324634552, 0.585809946060181, 0.387364208698273, 1.0 ],
 					"thickness" : 12
 				}
@@ -3575,7 +3574,7 @@
 			}
 , 			{
 				"box" : 				{
-					"addpoints_with_curve" : [ 0.0, 1.0, 0, 0.0, 1.111111111111111, 1.0, 0, 0.0, 2.222222222222222, 1.0, 0, 0.0, 3.333333333333333, -0.871794871794872, 0, 0.0, 4.444444444444445, -0.744574427604675, 0, 0.0, 5.555555555555555, -0.564102564102564, 0, 0.0, 6.666666666666666, -0.58974358974359, 0, 0.0, 7.777777777777778, 1.0, 0, 0.0, 8.888888888888889, 1.0, 0, 0.0 ],
+					"addpoints_with_curve" : [ 0.0, 1.0, 0, 0.0, 2.0, 0.457736849784851, 0, 0.0, 4.0, -0.00868546962738, 0, 0.0, 6.0, 0.670660376548767, 0, 0.0, 8.0, 1.0, 0, 0.0 ],
 					"bgcolor" : [ 0.925490196078431, 0.972549019607843, 0.972549019607843, 1.0 ],
 					"classic_curve" : 1,
 					"clicksustain" : 0,
@@ -4439,6 +4438,8 @@
 					"saved_object_attributes" : 					{
 						"autostart" : 0,
 						"defer" : 0,
+						"node_bin_path" : "",
+						"npm_bin_path" : "",
 						"watch" : 0
 					}
 ,
@@ -4597,30 +4598,30 @@
 						"vector" : 						{
 							"0" : 							{
 								"label" : "Dimension 1",
-								"data" : [ -0.449596136808395, -0.143559366464615, -0.410183668136597, -0.55356502532959, -0.744574427604675, -1.0, -1.0, -1.0, -0.567185819149017 ]
+								"data" : [ 1.0, 0.457736849784851, -0.00868546962738, 0.670660376548767, 1.0 ]
 							}
 ,
 							"1" : 							{
 								"label" : "Dimension 2",
-								"data" : [ 0.973578214645386, 0.833363950252533, 0.695759356021881, 0.687138557434082, -0.263521075248718, -1.066767811775208, -1.142073273658752, -1.144778370857239, -0.287156999111176 ]
+								"data" : [ 0.878876268863678, 0.086825728416443, -0.973149597644806, -1.459626793861389, -1.756090044975281 ]
 							}
 ,
 							"2" : 							{
 								"label" : "Dimension 3",
-								"data" : [ -0.381241202354431, -0.230804085731506, -0.285303294658661, -0.636429309844971, -0.813261330127716, -0.486410290002823, -0.819069385528564, -1.122025370597839, -0.169085010886192 ]
+								"data" : [ 1.245213508605957, 0.454946249723434, -0.919988811016083, -1.613465547561646, -1.420589566230774 ]
 							}
 ,
 							"3" : 							{
 								"label" : "Dimension 4",
-								"data" : [ 1.0, 1.0, 1.0, -0.871794871794872, -0.744574427604675, -0.564102564102564, -0.58974358974359, 1.0, 1.0 ]
+								"data" : [ 1.260865569114685, 0.306930392980576, -0.907780230045319, -1.36919903755188, -0.591083943843842 ]
 							}
 
 						}
 ,
 						"text" : "I havent implemented text embeddings yet!",
-						"bias" : [ 0.0, -0.375, 0.0, -0.375 ],
-						"scale" : [ 1.0, 1.0, 1.0, 0.670588235294117 ],
-						"metadata_keys" : [ "Spectral Rolloff", "Pitch", "Spectral Centroid", "Spectral Bandwidth" ]
+						"bias" : [ -1.625, -1.5625, -1.5, -1.4375 ],
+						"scale" : [ 1.835294117647059, 1.0, 1.0, 1.0 ],
+						"metadata_keys" : [ "Pitch", "Spectral Rolloff", "Spectral Centroid", "Spectral Bandwidth" ]
 					}
 ,
 					"id" : "obj-44",
@@ -4712,6 +4713,8 @@
 					"saved_object_attributes" : 					{
 						"autostart" : 0,
 						"defer" : 0,
+						"node_bin_path" : "",
+						"npm_bin_path" : "",
 						"watch" : 0
 					}
 ,
@@ -4835,7 +4838,7 @@
 					"fontname" : "Helvetica Neue",
 					"fontsize" : 20.0,
 					"id" : "obj-34",
-					"items" : [ "Spectral Rolloff", ",", "Pitch", ",", "Spectral Centroid", ",", "Spectral Bandwidth" ],
+					"items" : [ "Pitch", ",", "Spectral Rolloff", ",", "Spectral Centroid", ",", "Spectral Bandwidth" ],
 					"maxclass" : "umenu",
 					"numinlets" : 1,
 					"numoutlets" : 3,

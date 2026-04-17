@@ -97,7 +97,7 @@ def prepare_data(sound_data, metadata_keys=None):
             metadata_vectors[i] = (metadata_vectors[i] - meta_mean) / meta_std
 
         input_dim = latent_data.shape[1]
-        latent_dim = len(metadata_keys) + 4  # Number of metadata features
+        latent_dim = len(metadata_keys) #+ 4  # Number of metadata features
 
         return latent_data, metadata_vectors, metadata_keys, input_dim, latent_dim
 
