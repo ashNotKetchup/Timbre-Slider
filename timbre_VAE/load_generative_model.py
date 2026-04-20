@@ -10,16 +10,17 @@ import sys
 import os
 from dotenv import load_dotenv
 load_dotenv()
-if "HF_TOKEN" not in os.environ:
-    raise EnvironmentError(
-        "HF_TOKEN environment variable not set.\n"
-        "Get a token at https://huggingface.co/settings/tokens\n"
-        "Then add it to a .env file:  HF_TOKEN=hf_your_token_here"
-    )
-
-# Login globally so hf_hub_download picks up the token automatically
-from huggingface_hub import login as _hf_login
-_hf_login(token=os.environ["HF_TOKEN"], add_to_git_credential=False)
+# Login if token available, but don't fail if no internet (models may be cached)
+if "HF_TOKEN" in os.environ:
+    try:
+        from huggingface_hub import login as _hf_login
+        _hf_login(token=os.environ["HF_TOKEN"], add_to_git_credential=False)
+        print("[init] Authenticated with HuggingFace Hub")
+    except Exception as e:
+        print(f"[init] Warning: Could not authenticate with HuggingFace: {e}")
+        print("[init] Continuing with cached models (if available)...")
+else:
+    print("[init] HF_TOKEN not set. Using cached models only.")
 
 base_dir = 'streamable-stable-audio-open' #replace with fork of shuoyangs repo
 sys.path.append(f'{base_dir}')
