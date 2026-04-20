@@ -81,6 +81,13 @@ def prepare_data(sound_data, metadata_keys=None, resolution_multiplier=4):
         # metadata_keys: list of feature names in order
 
         print(f'[data] {len(latent_encodings)} encodings, shape {latent_encodings[0].shape}')
+        
+        # Build clip_ids array to track which frame belongs to which clip
+        clip_ids = []
+        for clip_idx, encoding in enumerate(latent_encodings):
+            clip_ids.extend([clip_idx] * encoding.shape[0])
+        clip_ids = np.array(clip_ids, dtype=np.int32)
+        
         latent_data = np.concatenate(latent_encodings, axis=0)  # shape: (total_time, dim)
         
         # Standardise the latent dataset to mean 0, std 1
@@ -97,9 +104,9 @@ def prepare_data(sound_data, metadata_keys=None, resolution_multiplier=4):
             metadata_vectors[i] = (metadata_vectors[i] - meta_mean) / meta_std
 
         input_dim = latent_data.shape[1]
-        latent_dim = len(metadata_keys) + 24  # Number of metadata features
+        latent_dim = len(metadata_keys) + 12  # Number of metadata features + extra dimensions for unstructured variance
 
-        return latent_data, metadata_vectors, metadata_keys, input_dim, latent_dim
+        return latent_data, metadata_vectors, metadata_keys, input_dim, latent_dim, clip_ids
 
 class VAE(nn.Module):
         
@@ -187,7 +194,7 @@ def attribute_distance_loss_dimwise_vectorised(mu, x_attr, delta=1.0, eps=1e-8):
     loss = torch.abs(latent_term - attr_term).mean()
     return loss
 
-def vae_loss(recon_x, x, mu, logvar, x_attr, vae, alpha=1.0, beta=0, theta=0): #alpha=1.0, beta=0.1, theta=10.0
+def vae_loss(recon_x, x, mu, logvar, x_attr, vae, alpha=1.0, beta=0.1, theta=100): #alpha=1.0, beta=0.1, theta=10.0
     z = vae.reparameterize(mu, logvar)
     loss_fn = nn.MSELoss(reduction='mean')
     recon_loss = loss_fn(recon_x, x)
@@ -197,7 +204,7 @@ def vae_loss(recon_x, x, mu, logvar, x_attr, vae, alpha=1.0, beta=0, theta=0): #
     loss = alpha*recon_loss + beta*kl + theta*attr_loss
     return loss, (recon_loss, kl, attr_loss)
 
-def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=256, learning_rate=1e-3, plot_loss=False):
+def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=256, learning_rate=1e-3, plot_loss=False, alpha_max=1.0, beta_max=0, theta_max=10.0):
     optimizer = optim.Adam(vae.parameters(), lr=learning_rate)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
     loss_history = []
@@ -227,23 +234,38 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
         kl_epoch = 0
         attr_epoch = 0
 
-        alpha = 2.0
+
+        #no warmup
+        alpha = alpha_max
+        # beta = beta_max
+        # theta = theta_max
+
+        # # With Warmups:
+        # alpha_wait = epochs // 10  # Wait 10% of training before starting to apply reconstruction loss
+        # alpha_warmup = epochs // 4
+        # if epoch < alpha_wait:
+        #     alpha = 0.0
+        # elif epoch < alpha_warmup:
+        #     alpha = alpha_max * (epoch / max(1, alpha_warmup))
+        # else:
+        #     alpha = alpha_max
+
         
-        # Cyclic/monotonic KL annealing
-        beta_max = 0.005
+        # KL annealing 
         kl_warmup_epochs = epochs // 3
         if epoch < kl_warmup_epochs:
             beta = beta_max * (epoch / max(1, kl_warmup_epochs))
         else:
             beta = beta_max
 
-        # Attribute loss warmup
-        max_theta = 10.0
-        attr_warmup_epochs = epochs // 4
+        # Attribute loss
+        attr_warmup_epochs = epochs // 4  # Wait 25% of training before starting to apply attribute loss, then ramp up to full over next 25%
         if epoch < attr_warmup_epochs:
             theta = 0.0
         else:
-            theta = max_theta * min(1.0, (epoch - attr_warmup_epochs) / max(1, epochs // 6))
+            theta = theta_max * min(1.0, (epoch - attr_warmup_epochs) / max(1, epochs // 6))
+
+
 
         for i in range(0, latent_data.size(0), batch_size):
             idx = perm[i:i+batch_size]
@@ -267,7 +289,7 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
 
         if plot_loss and (epoch % 5 == 0 or epoch == epochs - 1):
             ax.clear()
-            ax.set_title("VAE Training Loss")
+            ax.set_title(f"VAE Training Loss - Epoch {epoch}, alpha={alpha:.2f}, beta={beta:.2f}, theta={theta:.2f}")
             ax.plot(total_loss_history, label='Total Loss', color='black', linewidth=2)
             ax.plot(recon_loss_history, label='Recon Loss', color='blue', alpha=0.7)
             ax.plot(kl_loss_history, label='KL Loss', color='red', alpha=0.7)

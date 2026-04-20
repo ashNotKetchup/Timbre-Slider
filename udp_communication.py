@@ -168,7 +168,7 @@ def handle_request_retrain_vae(message):
         print(f"[retrain] {len(metadata_keys)} feature dims selected")
 
         # Prepare data for the combined set
-        latent_data, metadata_vectors, metadata_keys_new, input_dim_new, latent_dim_new = prepare_data(sound_data, metadata_keys=metadata_keys)
+        latent_data, metadata_vectors, metadata_keys_new, input_dim_new, latent_dim_new, clip_ids = prepare_data(sound_data, metadata_keys=metadata_keys)
         print(f"[retrain] Data prepared: {latent_data.shape[0]} frames, in={input_dim_new}, z={latent_dim_new}")
     # else:
         #     print("No example file to add, preparing data from sound_data only.")
@@ -179,7 +179,7 @@ def handle_request_retrain_vae(message):
         #     print(f"Adjusted input_dim_new: {input_dim_new}, latent_dim_new: {latent_dim_new}")
         # print("Initializing VAE...")
         vae = VAE(input_dim=input_dim_new, latent_dim=latent_dim_new)
-        vae, loss_lists, loss_labels = train_vae(vae, latent_data, metadata_vectors, num_epochs=250, batch_size=128, learning_rate=1e-3, plot_loss=False)
+        vae, loss_lists, loss_labels = train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=128, learning_rate=1e-3, plot_loss=True)
         print(f"[retrain] VAE trained — final loss: {loss_lists[0][-1]:.1f}")
         # Update global model (in-memory)
         timbre_gen_model = Model(model_type=model_type, model_path=[model_location], control_vae_path=None, control_vae_input_dim=input_dim_new, control_vae_latent_dim=latent_dim_new)

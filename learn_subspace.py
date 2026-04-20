@@ -55,7 +55,7 @@ sound_files = [f for f in os.listdir(sample_folder) if f.endswith(('.wav', '.aif
 # %%
 # Preprocess data
 sound_data, feature_keys, pca = get_features(sound_files, feature_type, model=model, save_path=feature_save_path, overwrite=False,root_folder=sample_folder)
-latent_data, metadata_vectors, metadata_keys, input_dim, latent_dim = prepare_data(sound_data)
+latent_data, metadata_vectors, metadata_keys, input_dim, latent_dim, clip_ids = prepare_data(sound_data)
 print(f'Timbre attributes are: {metadata_keys}')
 latent_dim = len(metadata_keys) + extra_dims  # Adjust latent_dim if extra dims are added
 
