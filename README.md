@@ -15,25 +15,25 @@ MALT encodes audio into a neural latent space (via RAVE or Stable Audio Open 1.0
 
 ## Quick Start
 
+### 🎯 Easiest Way (No Terminal Needed)
+
+1. Clone the repo (with submodule):
+   ```bash
+   git clone --recursive https://github.com/ashNotKetchup/Timbre-Slider.git
+   cd Timbre-Slider
+   ```
+
+2. **Open [`SETUP.md`](SETUP.md)** — Then double-click the numbered scripts in the `Commands/` folder.
+
+   No terminal knowledge required. Just follow the 3 steps! ✨
+
+### 🔧 Terminal Alternative
+
+If you prefer the command line:
 ```bash
-# 1. Clone with submodule
-git clone --recursive https://github.com/ashNotKetchup/Timbre-Slider.git
-cd Timbre-Slider
-
-# 2. Set up environment & install deps
-make setup
-
-# 3. Add your HuggingFace token
-#    (make setup creates .env from .env.example if it doesn't exist)
-#    Edit .env and replace the placeholder with your real token
-#    Get one at https://huggingface.co/settings/tokens
-nano .env
-
-# 4. Download the Stable Audio Open model (~1.2 GB, cached in ~/.cache/huggingface)
-make download-model
-
-# 5. Launch the interface (starts server + opens Max/MSP)
-make launch-interface
+make setup           # Install dependencies
+make download-model  # Download the model (prompts for HF token)
+make launch-interface  # Launch the app
 ```
 
 If you already cloned without `--recursive`:
@@ -45,11 +45,18 @@ git submodule update --init --recursive
 
 ```
 Timbre-Slider/
+├── SETUP.md                    # 👈 Start here! Click scripts to set up
+├── Commands/                   # Clickable scripts (no terminal needed)
+│   ├── 1-install.command
+│   ├── 2-download-model.command
+│   ├── 3-launch.command
+│   └── update.command
+│
 ├── udp_communication.py       # HTTP server — main entry point
 ├── learn_subspace.py           # Notebook-style subspace learning script
 ├── export.py                   # TorchScript export for Stable Audio autoencoder
 ├── mass_preprocess.py          # Batch feature preprocessing
-├── Makefile                    # Setup & run commands
+├── Makefile                    # Setup & run commands (alternative to Scripts/)
 ├── requirements.txt            # Direct Python dependencies
 ├── requirements-lock.txt       # Full pinned versions (pip freeze)
 ├── .env.example                # Template for environment variables
