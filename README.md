@@ -15,17 +15,20 @@ MALT encodes audio into a neural latent space (via RAVE or Stable Audio Open 1.0
 
 ## Quick Start
 
-### 🎯 Easiest Way (No Terminal Needed)
+### 🚀 Simplest Way — One Click
 
-1. Clone the repo (with submodule):
-   ```bash
-   git clone --recursive https://github.com/ashNotKetchup/Timbre-Slider.git
-   cd Timbre-Slider
-   ```
+1. **Download & run:** [`install.command`](install.command) (or `install.sh`)
+   - Just double-click it (or `bash install.sh` in terminal)
+   - It clones the repo, then walks you through setup
+   - That's it! ✨
 
-2. **Open [`SETUP.md`](SETUP.md)** — Then double-click the numbered scripts in the `Commands/` folder.
+### 🎯 Or: Manual Setup (Already Cloned)
 
-   No terminal knowledge required. Just follow the 3 steps! ✨
+If you already have the repo:
+
+1. **Open [`SETUP.md`](SETUP.md)** — Then double-click the numbered scripts in the `Commands/` folder.
+   - No terminal knowledge required
+   - Just follow the 3 steps
 
 ### 🔧 Terminal Alternative
 
@@ -45,8 +48,10 @@ git submodule update --init --recursive
 
 ```
 Timbre-Slider/
-├── SETUP.md                    # 👈 Start here! Click scripts to set up
-├── Commands/                   # Clickable scripts (no terminal needed)
+├── install.command             # 👈 Start here! (clone + setup in one click)
+├── install.sh                  # Same as above, but for terminal
+├── SETUP.md                    # Manual setup guide
+├── Commands/                   # Clickable scripts (if already cloned)
 │   ├── 1-install.command
 │   ├── 2-download-model.command
 │   ├── 3-launch.command
