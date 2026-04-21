@@ -104,7 +104,7 @@ def prepare_data(sound_data, metadata_keys=None, resolution_multiplier=4):
             metadata_vectors[i] = (metadata_vectors[i] - meta_mean) / meta_std
 
         input_dim = latent_data.shape[1]
-        latent_dim = len(metadata_keys) + 12  # Number of metadata features + extra dimensions for unstructured variance
+        latent_dim = len(metadata_keys) + 4  # Number of metadata features + extra dimensions for unstructured variance
 
         return latent_data, metadata_vectors, metadata_keys, input_dim, latent_dim, clip_ids
 
@@ -194,7 +194,7 @@ def attribute_distance_loss_dimwise_vectorised(mu, x_attr, delta=1.0, eps=1e-8):
     loss = torch.abs(latent_term - attr_term).mean()
     return loss
 
-def vae_loss(recon_x, x, mu, logvar, x_attr, vae, alpha=1.0, beta=0.1, theta=100): #alpha=1.0, beta=0.1, theta=10.0
+def vae_loss(recon_x, x, mu, logvar, x_attr, vae, alpha=10.0, beta=0.1, theta=100): #alpha=1.0, beta=0.1, theta=10.0
     z = vae.reparameterize(mu, logvar)
     loss_fn = nn.MSELoss(reduction='mean')
     recon_loss = loss_fn(recon_x, x)
@@ -204,7 +204,7 @@ def vae_loss(recon_x, x, mu, logvar, x_attr, vae, alpha=1.0, beta=0.1, theta=100
     loss = alpha*recon_loss + beta*kl + theta*attr_loss
     return loss, (recon_loss, kl, attr_loss)
 
-def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=256, learning_rate=1e-3, plot_loss=False, alpha_max=1.0, beta_max=0, theta_max=10.0):
+def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=256, learning_rate=1e-2, plot_loss=False, alpha_max=10.0, beta_max=0.1, theta_max=10.0):
     optimizer = optim.Adam(vae.parameters(), lr=learning_rate)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
     loss_history = []
