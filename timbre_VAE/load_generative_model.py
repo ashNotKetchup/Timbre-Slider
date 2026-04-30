@@ -10,16 +10,17 @@ import sys
 import os
 from dotenv import load_dotenv
 load_dotenv()
-if "HF_TOKEN" not in os.environ:
-    raise EnvironmentError(
-        "HF_TOKEN environment variable not set.\n"
-        "Get a token at https://huggingface.co/settings/tokens\n"
-        "Then add it to a .env file:  HF_TOKEN=hf_your_token_here"
-    )
-
-# Login globally so hf_hub_download picks up the token automatically
-from huggingface_hub import login as _hf_login
-_hf_login(token=os.environ["HF_TOKEN"], add_to_git_credential=False)
+# Login if token available, but don't fail if no internet (models may be cached)
+if "HF_TOKEN" in os.environ:
+    try:
+        from huggingface_hub import login as _hf_login
+        _hf_login(token=os.environ["HF_TOKEN"], add_to_git_credential=False)
+        print("[init] Authenticated with HuggingFace Hub")
+    except Exception as e:
+        print(f"[init] Warning: Could not authenticate with HuggingFace: {e}")
+        print("[init] Continuing with cached models (if available)...")
+else:
+    print("[init] HF_TOKEN not set. Using cached models only.")
 
 base_dir = 'streamable-stable-audio-open' #replace with fork of shuoyangs repo
 sys.path.append(f'{base_dir}')
@@ -83,6 +84,7 @@ class Model:
                                                                     model_half=False,
                                                                     skip_bottleneck=True,
                                                                     device=self.device)
+            # print(model_config)
 
             sr = model_config.get('sample_rate', '?')
             ldim = model_config['model']['pretransform']['config'].get('latent_dim', '?')
@@ -168,7 +170,7 @@ class Model:
             # Optionally encode with VAE (control model)
             latent_vector_flat = latent_vector.squeeze(0).T if latent_vector.ndim == 3 else latent_vector
             with torch.no_grad():
-                vae_z = self.control_model.encode_z(torch.from_numpy(latent_vector_flat))
+                vae_z = self.control_model.encode_mu(torch.from_numpy(latent_vector_flat))
             latent_vector = vae_z.T[np.newaxis, ...]  # reshape back to (1, latent_dim) for consistency
             latent_vector = latent_vector.cpu().numpy() if hasattr(latent_vector, "cpu") else np.array(latent_vector)
             print(f"[model] Control-encoded: {latent_vector.shape}")
