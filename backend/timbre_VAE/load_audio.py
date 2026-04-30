@@ -3,10 +3,10 @@ import librosa as li
 import numpy as np
 from typing import List
 from functools import reduce
-from timbre_VAE.logger import log
+from .logger import log
 import os
 import soundfile as sf
-from timbre_VAE.plotting import save_spectrogram
+from .plotting import save_spectrogram
 
 
 class BufferManager:

@@ -5,7 +5,7 @@ from typing import List, Union, Tuple
 from functools import reduce
 import json
 import math
-from timbre_VAE.global_scaler import GlobalScaler, TimeCompressor
+from .global_scaler import GlobalScaler, TimeCompressor
 import sys
 import os
 from dotenv import load_dotenv
@@ -27,7 +27,7 @@ sys.path.append(f'{base_dir}')
 
 import torch
 from models import get_pretrained_pretransform
-from control_models.control_model import ControlModel
+from .control_model import ControlModel
 from export import remove_parametrizations
 torch_250 = True if torch.__version__ >= "2.5" else False
 

@@ -5,10 +5,10 @@
 # %%
 
 # Refactored: import from new modules
-from timbre_VAE.load_generative_model import Model
-from timbre_VAE.features import audio_features, batch_compute_features, get_features, calculate_effect_size_matrix
-from timbre_VAE.vae_train import VAE, prepare_data, train_vae
-from timbre_VAE.plotting import plot_loss, plot_effect_size_correlations
+from .timbre_VAE.load_generative_model import Model
+from .timbre_VAE.features import audio_features, batch_compute_features, get_features, calculate_effect_size_matrix
+from .timbre_VAE.vae_train import VAE, prepare_data, train_vae
+from .timbre_VAE.plotting import plot_loss, plot_effect_size_correlations
 from IPython.display import Audio, display
 from ipywidgets import interact, FloatSlider
 import numpy as np
@@ -16,7 +16,7 @@ import os
 import torch
 import librosa as li
 from ipywidgets import FloatSlider, interact
-from timbre_VAE.interface import simple_timbre_slider_interface
+from .timbre_VAE.interface import simple_timbre_slider_interface
 import pickle
 import pandas as pd
 
@@ -24,7 +24,7 @@ import pandas as pd
 # Model and data setup
 model_name: str = 'nasa'
 
-model_location:str = 'timbre_VAE/models/RAVE_models/generative_models/'+model_name+'.ts'
+model_location:str = 'backend/timbre_VAE/models/RAVE_models/generative_models/'+model_name+'.ts'
 control_model_location = 'precomputed/control_models/vae_scripted_model.ts'
 
 
@@ -98,14 +98,15 @@ vae, loss_lists, loss_labels = train_vae(vae, latent_data, metadata_vectors, num
 vae_save_name = f"{os.path.splitext(os.path.basename(feature_save_path))[0]}_{os.path.splitext(os.path.basename(example_sound_file))[0]}_vae.pt"
 vae_save_name += 'learning_rate_1e-3_epochs_200_batchsize_128.pt'
 # Optionally reload VAE from saved state
-vae_save_path = os.path.join("control_models", vae_save_name)
+vae_save_path = os.path.join("precomputed/control_models", vae_save_name)
 if os.path.exists(vae_save_path):
     vae.load_state_dict(torch.load(vae_save_path))
     vae.eval()
     print(f"Reloaded VAE from {vae_save_path}")
 # vae.load_state_dict(torch.load(vae_save_path))
 # vae.eval()
-vae_save_path = os.path.join("control_models", vae_save_name)
+vae_save_path = os.path.join("precomputed/control_models", vae_save_name)
+os.makedirs(os.path.dirname(vae_save_path), exist_ok=True)
 torch.save(vae.state_dict(), vae_save_path)
 print(f"VAE saved to {vae_save_path}")
 

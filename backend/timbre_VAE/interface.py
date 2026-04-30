@@ -1,8 +1,8 @@
 
-from timbre_VAE.load_generative_model import Model
-from timbre_VAE.features import audio_features, batch_compute_features
-from timbre_VAE.vae_train import VAE, prepare_data, train_vae
-from timbre_VAE.plotting import plot_loss
+from .load_generative_model import Model
+from .features import audio_features, batch_compute_features
+from .vae_train import VAE, prepare_data, train_vae
+from .plotting import plot_loss
 from IPython.display import Audio, display
 from ipywidgets import interact, FloatSlider
 import numpy as np

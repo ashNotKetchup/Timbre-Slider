@@ -71,9 +71,9 @@ Timbre-Slider/
 │   ├── plotting.py               # Loss & correlation plots
 │   ├── logger.py                 # Request logging
 │   ├── global_scaler.py          # Latent scaling/compression
+│   ├── control_model.py          # VAE control model wrapper
 │   └── models/                   # Model definitions & pretrained loading
 │
-├── control_models/             # VAE control model wrapper
 ├── frontend/                   # Max/MSP patches for the GUI
 ├── sounds/                     # Your audio samples go here
 ├── precomputed/                # Cached features & trained control models
