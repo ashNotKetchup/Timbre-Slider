@@ -6,7 +6,6 @@ import warnings
 import logging
 import numpy as np
 import torch
-from pathlib import Path
 
 from .utilities.load_audio import BufferManager
 from .timbre_VAE.load_generative_model import Model, LatentRepresentation
@@ -58,12 +57,9 @@ gen_model = None  # Loaded in start_server()
 
 # --- CONFIGURATION (defaults – nothing heavy happens here) ---
 # model_type = 'RAVE'           # or 'STABLE_AUDIO'
-# Construct absolute path relative to this script's location
-model_location = 'stable-ae-float32-torch25x.ts'
-_script_dir = Path(__file__).parent  # backend/
-model_location = str(_script_dir / 'models' / 'StableAudio' / model_location)
+model_location = './data/models/StableAudio/stable-ae-float32-torch25x.ts'
 feature_type = 'pca'          # or 'raw_features', 'audio_commons'
-sample_folder = 'sounds/Foley'
+sample_folder = './data/eg_sounds/Foley'
 
 # --- Mutable state (initialised lazily by handlers) ---
 feature_paths = None

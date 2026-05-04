@@ -60,7 +60,7 @@ class BufferManager:
         return True
 
 
-    def write_buffer(self, audio_array: np.array = None, buffer_name: str = 'output', folder_name: str = (os.getcwd()+'/audio'), save_plot: bool = False) -> bool:
+    def write_buffer(self, audio_array: np.array = None, buffer_name: str = 'output', folder_name: str = (os.getcwd()+'/data/audio'), save_plot: bool = False) -> bool:
         """Write an audio np:array to a named file. Optionally save a spectrogram plot.
         
         Test:
