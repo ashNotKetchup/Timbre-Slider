@@ -13,6 +13,7 @@
 *.ogg
 *.flac
 *.m4a
+*'test sounds'/
 
 # Ableton metadata
 *.asd

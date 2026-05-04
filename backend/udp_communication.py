@@ -8,7 +8,15 @@ import random
 import numpy as np
 import torch
 
+from .timbre_VAE.load_audio import BufferManager
+from .timbre_VAE.load_generative_model import Model, LatentRepresentation
+# ControlModel
+from .timbre_VAE.logger import RequestLogger
+from .timbre_VAE.vae_train import prepare_data, VAE, train_vae
+from .timbre_VAE.features import batch_compute_features, get_features
 
+
+print(f'torch version: {torch.__version__}')
 # --- CONSOLE LOG DEPTH ---
 LOG_DEPTH = os.getenv("LOG_DEPTH", "normal").strip().lower()
 if LOG_DEPTH in {"minimal", "quiet", "silent", "0"}:
@@ -39,11 +47,6 @@ if LOG_DEPTH in {"minimal", "quiet", "silent", "0"}:
 
     builtins.print = _minimal_print
 
-from .timbre_VAE.load_audio import BufferManager
-from .timbre_VAE.load_generative_model import Model, LatentRepresentation, ControlModel
-from .timbre_VAE.logger import RequestLogger
-from .timbre_VAE.vae_train import prepare_data, VAE, train_vae
-from .timbre_VAE.features import batch_compute_features, get_features
 
 
 # --- SETUP LIGHTWEIGHT DEPENDENCIES –––
@@ -55,10 +58,7 @@ gen_model = None  # Loaded in start_server()
 
 # --- CONFIGURATION (defaults – nothing heavy happens here) ---
 # model_type = 'RAVE'           # or 'STABLE_AUDIO'
-model_type = 'STABLE_AUDIO' 
-model_name = 'percussion'
-model_location = f'backend/timbre_VAE/models/RAVE_models/generative_models/{model_name}.ts'
-vae_path = 'precomputed/control_models/Foley_STABLE_AUDIO_audio_commons_preprocessed_sound_data_EX_Noise_120_waterfall_creaks_vae.pt'
+model_location = 'backend/timbre_VAE/models/StableAudio/stable-ae-float32-torch25x.ts'
 feature_type = 'pca'          # or 'raw_features', 'audio_commons'
 sample_folder = 'sounds/Foley'
 
@@ -90,8 +90,7 @@ def handle_request_load_folder(message):
         from .mass_preprocess import mass_preprocess
         # Compute features (or use precomputed)
         feature_paths = mass_preprocess(folder_path, 
-                                        model_name=model_name, 
-                                        model_type=model_type, 
+                                        gen_model, 
                                         overwrite=False)
         cache_key = 'raw_features' if feature_type in ('pca', 'PCA') else feature_type
         feature_save_path = feature_paths[cache_key]
@@ -184,7 +183,9 @@ def handle_request_retrain_vae(message):
         vae, loss_lists, loss_labels = train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=1024, learning_rate=1e-2, plot_loss=False)
         print(f"[retrain] VAE trained — final loss: {loss_lists[0][-1]:.1f}")
         # Update global model (in-memory)
-        timbre_gen_model = Model(model_type=model_type, model_path=[model_location], control_vae_path=None, control_vae_input_dim=input_dim_new, control_vae_latent_dim=latent_dim_new)
+        timbre_gen_model = gen_model
+        timbre_gen_model.control_vae_input_dim=input_dim_new
+        timbre_gen_model.control_vae_latent_dim=latent_dim_new
         timbre_gen_model.control_model = vae
         print(f"[retrain] Model updated for {_last_loaded_features['folder_path']}")
         # Encode the example audio with the new VAE and include latent in reply
@@ -420,16 +421,17 @@ class SimpleHandler(BaseHTTPRequestHandler):
 def start_server():
     """Initialize and start the UDP communication server."""
     global gen_model
+
     
     # Load generative model eagerly — it's needed for almost every request
-    print(f"\n── Loading generative model ({model_type}) …")
+    print(f"\n── Loading generative model ({model_location}) …")
     try:
-        gen_model = Model(model_type=model_type, model_path=[model_location])
+        gen_model = Model(model_path=model_location)
         print("── Generative model ready.\n")
     except Exception as e:
         print(f"✗ Failed to load generative model: {e}")
         print(f"  model_location: {model_location}")
-        print(f"  model_type: {model_type}")
+        # print(f"  model_type: {model_type}")
         raise
 
     # Create and start server

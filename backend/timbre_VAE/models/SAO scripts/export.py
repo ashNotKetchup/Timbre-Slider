@@ -12,8 +12,7 @@ from pathlib import Path
 import torch
 torch_250 = True if torch.__version__ >= "2.5" else False
 
-from .timbre_VAE.models import get_pretrained_pretransform
-from .utils import remove_parametrizations
+from models import get_pretrained_pretransform
 
 import cached_conv as cc
 
@@ -25,6 +24,20 @@ def pick_device(cli_device: str | None) -> str:
     if torch.cuda.is_available():
         return "cuda"
     return "cpu"
+
+def remove_parametrizations(module: torch.nn.Module) -> None:
+    try:
+        from torch.nn.utils import parametrize as _parametrize
+    except Exception:
+        return
+    for m in module.modules():
+        if hasattr(m, "parametrizations"):
+            names = list(getattr(m, "parametrizations").keys())
+            for pname in names:
+                try:
+                    _parametrize.remove_parametrizations(m, pname, leave_parametrized=True)
+                except Exception:
+                    pass
 
 def test_streaming(pretransform: torch.nn.Module, device: str) -> None:
     print("Testing the exported model...")

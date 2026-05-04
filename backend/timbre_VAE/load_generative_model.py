@@ -8,33 +8,40 @@ import math
 from .global_scaler import GlobalScaler, TimeCompressor
 import sys
 import os
-from dotenv import load_dotenv
-load_dotenv()
-# Login if token available, but don't fail if no internet (models may be cached)
-if "HF_TOKEN" in os.environ:
-    try:
-        from huggingface_hub import login as _hf_login
-        _hf_login(token=os.environ["HF_TOKEN"], add_to_git_credential=False)
-        print("[init] Authenticated with HuggingFace Hub")
-    except Exception as e:
-        print(f"[init] Warning: Could not authenticate with HuggingFace: {e}")
-        print("[init] Continuing with cached models (if available)...")
-else:
-    print("[init] HF_TOKEN not set. Using cached models only.")
 
-base_dir = 'streamable-stable-audio-open' #replace with fork of shuoyangs repo
-sys.path.append(f'{base_dir}')
+# # Lazy load dotenv to support PyInstaller bundles without it
+# try:
+#     from dotenv import load_dotenv
+#     load_dotenv()
+# except ImportError:
+#     pass
 
-import torch
-from models import get_pretrained_pretransform
-from .control_model import ControlModel
-from export import remove_parametrizations
-torch_250 = True if torch.__version__ >= "2.5" else False
+# # Login if token available, but don't fail if no internet (models may be cached)
+# if "HF_TOKEN" in os.environ:
+#     try:
+#         from huggingface_hub import login as _hf_login
+#         _hf_login(token=os.environ["HF_TOKEN"], add_to_git_credential=False)
+#         print("[init] Authenticated with HuggingFace Hub")
+#     except Exception as e:
+#         print(f"[init] Warning: Could not authenticate with HuggingFace: {e}")
+#         print("[init] Continuing with cached models (if available)...")
+# else:
+#     print("[init] HF_TOKEN not set. Using cached models only.")
+
+# base_dir = 'streamable-stable-audio-open' #replace with fork of shuoyangs repo
+# sys.path.append(f'{base_dir}')
+
+# import torch
+# from models import get_pretrained_pretransform
+# from .control_model import ControlModel
+# from ..utils import remove_parametrizations
+
+# torch_250 = True if torch.__version__ >= "2.5" else False
 
 import librosa, time
 from IPython.display import Audio, display
 
-import cached_conv as cc
+# import cached_conv as cc
 
 
 
@@ -59,52 +66,44 @@ class Model:
     - decode: takes latent embeddings as a numpy array, returns audio as numpy array
     - get_info: gives information about the shape of the model
     """
-    def __init__(self, model_type='RAVE', model_path: Union[str, List[str]]=None, control_vae_path=None, control_vae_input_dim=None, control_vae_latent_dim=None) -> None:
+    def __init__(self, model_path, control_vae_path=None, control_vae_input_dim=None, control_vae_latent_dim=None) -> None:
 
         # TODO: change this to load a list, so that eg I can stack stable audio model on another encoder etc...
-        self.model_type = model_type
+        # self.model_type = model_type
+        self.model_path = model_path
         self.device = "cpu"
         # "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"[model] Loading {self.model_type} …")
-        if self.model_type == 'RAVE':
-            if isinstance(model_path, str):
-                self.model_paths: List[str] = [model_path] # make sure everything is a list
-            else:
-                self.model_paths = model_path
-            self.models = [self.__load_model(model_location) for model_location in self.model_paths]
-        elif self.model_type == 'STABLE_AUDIO':
-            cc.use_cached_conv(False)
+        print(f"[model] Loading {self.model_path} …")
+        print(f"[model] Device: {self.device}, torch {torch.__version__}")
+        self.models = [self.__load_model(self.model_path)]
+        # print(f"[model] Loaded model: {self.models[0]}")
+        #     ## Load the autoencoder from stable-audio-open-1.0
 
-            
-            print(f"[model] Device: {self.device}, torch {torch.__version__}")
+        #     autoencoder, model_config = get_pretrained_pretransform("stabilityai/stable-audio-open-1.0",
+        #                                                             model_half=False,
+        #                                                             skip_bottleneck=True,
+        #                                                             device=self.device)
+        #     # print(model_config)
 
-            ## Load the autoencoder from stable-audio-open-1.0
+        #     sr = model_config.get('sample_rate', '?')
+        #     ldim = model_config['model']['pretransform']['config'].get('latent_dim', '?')
+        #     ds = model_config['model']['pretransform']['config'].get('downsampling_ratio', '?')
+        #     print(f"[model] sr={sr}, latent_dim={ldim}, ds_ratio={ds}")
 
-            autoencoder, model_config = get_pretrained_pretransform("stabilityai/stable-audio-open-1.0",
-                                                                    model_half=False,
-                                                                    skip_bottleneck=True,
-                                                                    device=self.device)
-            # print(model_config)
+        #     remove_parametrizations(autoencoder)
 
-            sr = model_config.get('sample_rate', '?')
-            ldim = model_config['model']['pretransform']['config'].get('latent_dim', '?')
-            ds = model_config['model']['pretransform']['config'].get('downsampling_ratio', '?')
-            print(f"[model] sr={sr}, latent_dim={ldim}, ds_ratio={ds}")
-
-            remove_parametrizations(autoencoder)
-
-            autoencoder = autoencoder.to(self.device)
-            autoencoder = autoencoder.eval()
-            self.models = [autoencoder]
-        else:
-            raise ValueError(f"Unknown model_type: {self.model_type}")
+        #     autoencoder = autoencoder.to(self.device)
+        #     autoencoder = autoencoder.eval()
+        #     self.models = [autoencoder]
+        # else:
+        #     raise ValueError(f"Unknown model_type: {self.model_type}")
 
         self.control_model = None
-        if control_vae_path and control_vae_input_dim and control_vae_latent_dim:
-            self.control_model = ControlModel(control_vae_path, input_dim=control_vae_input_dim, latent_dim=control_vae_latent_dim)
-            print(f"[model] Control VAE loaded (in={control_vae_input_dim}, z={control_vae_latent_dim})")
-        else:            print("[model] No control VAE configured.")
-            # self.control_model = ControlModel(control_vae_path, input_dim=loaded_model.encode(torch.randn(1,1,44100)).shape[-1], latent_dim=16) #TODO: get these dimensions dynamically from the model instead of hardcoding
+        # if control_vae_path and control_vae_input_dim and control_vae_latent_dim:
+        #     self.control_model = ControlModel(control_vae_path, input_dim=control_vae_input_dim, latent_dim=control_vae_latent_dim)
+        #     print(f"[model] Control VAE loaded (in={control_vae_input_dim}, z={control_vae_latent_dim})")
+        # else:            print("[model] No control VAE configured.")
+        #     self.control_model = ControlModel(control_vae_path, input_dim=loaded_model.encode(torch.randn(1,1,44100)).shape[-1], latent_dim=16) #TODO: get these dimensions dynamically from the model instead of hardcoding
         
 
         self.dimension_count = None
@@ -130,13 +129,14 @@ class Model:
         
         return loaded_model
 
-    def encode(self, audio_array:np.ndarray, use_text:bool = False) -> Tuple[np.ndarray, str]:
+    def encode(self, audio_array:np.ndarray, use_text:bool = False, mono:bool = False) -> Tuple[np.ndarray, str]:
         """
         Encode an audio file into its latent representation
 
         Parameters:
         audio_array (x): numpy array of a loaded audio file
         use_text: bool declaring weather or not to recalculate text embedding
+        mono: bool declaring weather or not to convert stereo to mono
 
         Returns:
         Latent representation (y) a np array of shape []
@@ -147,9 +147,9 @@ class Model:
         audio_torch: torch.Tensor = torch.from_numpy(audio_array).reshape(1,1,-1)
         # print(f'Running encoder, devic/e: {self.device}, audio on device: {audio_torch.device}')
         # Convert mono to stereo if needed (eg, for stable audio)
-        if self.model_type == 'STABLE_AUDIO' and audio_torch.shape[1] == 1:
+        if mono == False and audio_torch.shape[1] == 1:
             audio_torch = audio_torch.repeat(1, 2, 1)
-        elif audio_torch.shape[1] == 2:
+        elif mono == True and audio_torch.shape[1] == 2:
             audio_torch = audio_torch.mean(dim=1, keepdim=True)  # convert to mono for rave
   
         # Ensure all models are on the correct device
@@ -159,7 +159,6 @@ class Model:
             # Use reduce to recursively apply the encode() method of each object
             encoding_torch:torch.Tensor = reduce(lambda acc, each_encoder: each_encoder.encode(acc), self.models, audio_torch) #does g.encode(f.encode(x)) for a list of models [f,g] and input audio_torch
     
-        
         latent_vector:np.ndarray = encoding_torch.numpy(force=True)
             # encoding_torch:torch.Tensor = reduce(lambda acc, each_encoder: each_encoder.encode(acc), self.models, audio_torch)
         # latent_vector:np.ndarray = encoding_torch.cpu().numpy()

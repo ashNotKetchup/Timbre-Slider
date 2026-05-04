@@ -6,7 +6,6 @@ from functools import reduce
 from .logger import log
 import os
 import soundfile as sf
-from .plotting import save_spectrogram
 
 
 class BufferManager:
@@ -72,7 +71,11 @@ class BufferManager:
         filepath = os.path.join(folder_name, buffer_name) + ".wav"
         sf.write(filepath, audio, sr)
         if save_plot:
-            save_spectrogram(filepath)
+            try:
+                from .plotting import save_spectrogram
+                save_spectrogram(filepath)
+            except ImportError:
+                pass  # Plotting dependencies not available (e.g., in PyInstaller bundle)
         return True
 
 
