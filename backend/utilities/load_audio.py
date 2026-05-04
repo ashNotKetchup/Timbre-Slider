@@ -3,7 +3,7 @@ import librosa as li
 import numpy as np
 from typing import List
 from functools import reduce
-from .logger import log
+from ..timbre_VAE.logger import log
 import os
 import soundfile as sf
 
@@ -72,7 +72,7 @@ class BufferManager:
         sf.write(filepath, audio, sr)
         if save_plot:
             try:
-                from .plotting import save_spectrogram
+                from ..timbre_VAE.plotting import save_spectrogram
                 save_spectrogram(filepath)
             except ImportError:
                 pass  # Plotting dependencies not available (e.g., in PyInstaller bundle)

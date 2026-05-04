@@ -1,6 +1,6 @@
 
-from .timbre_VAE.features import get_features
-from .timbre_VAE.load_generative_model import Model
+from ..timbre_VAE.features import get_features
+from ..timbre_VAE.load_generative_model import Model
 import os
 
 def mass_preprocess(sample_folder, model, label=None, feature_types=None, sr=44100, overwrite=True):

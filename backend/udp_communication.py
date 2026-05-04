@@ -4,11 +4,11 @@ import os
 import builtins
 import warnings
 import logging
-import random
 import numpy as np
 import torch
+from pathlib import Path
 
-from .timbre_VAE.load_audio import BufferManager
+from .utilities.load_audio import BufferManager
 from .timbre_VAE.load_generative_model import Model, LatentRepresentation
 # ControlModel
 from .timbre_VAE.logger import RequestLogger
@@ -58,7 +58,10 @@ gen_model = None  # Loaded in start_server()
 
 # --- CONFIGURATION (defaults – nothing heavy happens here) ---
 # model_type = 'RAVE'           # or 'STABLE_AUDIO'
-model_location = 'backend/timbre_VAE/models/StableAudio/stable-ae-float32-torch25x.ts'
+# Construct absolute path relative to this script's location
+model_location = 'stable-ae-float32-torch25x.ts'
+_script_dir = Path(__file__).parent  # backend/
+model_location = str(_script_dir / 'models' / 'StableAudio' / model_location)
 feature_type = 'pca'          # or 'raw_features', 'audio_commons'
 sample_folder = 'sounds/Foley'
 
@@ -87,7 +90,7 @@ def handle_request_load_folder(message):
     if not folder_path or not os.path.isdir(folder_path):
         return {"type": "error", "content": f"Invalid folder path: {folder_path}"}
     try:
-        from .mass_preprocess import mass_preprocess
+        from .utilities.mass_preprocess import mass_preprocess
         # Compute features (or use precomputed)
         feature_paths = mass_preprocess(folder_path, 
                                         gen_model, 

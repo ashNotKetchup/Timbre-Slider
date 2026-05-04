@@ -2,15 +2,13 @@
 Backend module for Timbre-Slider.
 Exposes core audio processing and ML components.
 """
-import torch
-
-from .timbre_VAE.load_audio import BufferManager
+from .utilities.load_audio import BufferManager
 from .timbre_VAE.load_generative_model import Model, LatentRepresentation 
 # ControlModel
 from .timbre_VAE.logger import RequestLogger
 from .timbre_VAE.vae_train import prepare_data, VAE, train_vae
 from .timbre_VAE.features import batch_compute_features, get_features
-from .utils import remove_parametrizations
+# from .utils import remove_parametrizations
 
 
 __all__ = [

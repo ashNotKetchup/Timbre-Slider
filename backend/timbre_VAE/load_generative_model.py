@@ -1,13 +1,11 @@
 import torch
-import librosa as li
 import numpy as np
-from typing import List, Union, Tuple
+from typing import Tuple
 from functools import reduce
 import json
-import math
+
 from .global_scaler import GlobalScaler, TimeCompressor
-import sys
-import os
+
 
 # # Lazy load dotenv to support PyInstaller bundles without it
 # try:
@@ -38,8 +36,6 @@ import os
 
 # torch_250 = True if torch.__version__ >= "2.5" else False
 
-import librosa, time
-from IPython.display import Audio, display
 
 # import cached_conv as cc
 
