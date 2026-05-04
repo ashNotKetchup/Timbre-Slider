@@ -7,12 +7,12 @@ import logging
 import numpy as np
 import torch
 
-from .utilities.load_audio import BufferManager
-from .timbre_VAE.load_generative_model import Model, LatentRepresentation
+from backend.utilities.load_audio import BufferManager
+from backend.timbre_VAE.load_generative_model import Model, LatentRepresentation
 # ControlModel
-from .timbre_VAE.logger import RequestLogger
-from .timbre_VAE.vae_train import prepare_data, VAE, train_vae
-from .timbre_VAE.features import batch_compute_features, get_features
+from backend.timbre_VAE.logger import RequestLogger
+from backend.timbre_VAE.vae_train import prepare_data, VAE, train_vae
+from backend.timbre_VAE.features import batch_compute_features, get_features
 
 
 print(f'torch version: {torch.__version__}')
@@ -86,7 +86,7 @@ def handle_request_load_folder(message):
     if not folder_path or not os.path.isdir(folder_path):
         return {"type": "error", "content": f"Invalid folder path: {folder_path}"}
     try:
-        from .utilities.mass_preprocess import mass_preprocess
+        from backend.utilities.mass_preprocess import mass_preprocess
         # Compute features (or use precomputed)
         feature_paths = mass_preprocess(folder_path, 
                                         gen_model, 
@@ -157,12 +157,12 @@ def handle_request_retrain_vae(message):
 
         # Re-run feature selection on the combined data so all samples share the same keys
         if feature_type in ('pca', 'PCA'):
-            from .timbre_VAE.features import pca_attributes
+            from backend.timbre_VAE.features import pca_attributes
             metadata_keys, reduced_dicts, pca = pca_attributes(sound_data, 'features_recon')
             for i, rd in enumerate(reduced_dicts):
                 sound_data[i]['features_recon'] = rd
         else:
-            from .timbre_VAE.features import filter_attributes
+            from backend.timbre_VAE.features import filter_attributes
             metadata_keys, _ = filter_attributes(sound_data, 'features_recon')
 
         print(f"[retrain] {len(metadata_keys)} feature dims selected")

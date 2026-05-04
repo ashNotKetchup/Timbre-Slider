@@ -9,5 +9,5 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 if __name__ == "__main__":
-    from backend.udp_communication import start_server
+    from backend.run_server import start_server
     start_server()

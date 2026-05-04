@@ -50,7 +50,7 @@ kill-server:
 launch-interface: KILL_SERVER_SILENT=1
 launch-interface: kill-server
 	@echo "(Re)Launching MALT server on :5000"
-	@. .venv/bin/activate && (LOG_DEPTH=minimal PYTHONWARNINGS=ignore python3 -m backend &)
+	@. .venv/bin/activate && (LOG_DEPTH=minimal PYTHONWARNINGS=ignore python3 -m backend.run_server &)
 	@sleep 1
 	@open frontend/frontend.maxpat
 
@@ -58,12 +58,12 @@ launch-interface: kill-server
 restart-server: KILL_SERVER_SILENT=1
 restart-server: kill-server
 	@echo "(Re)Launching MALT server on :5000"
-	@. .venv/bin/activate && (LOG_DEPTH=minimal PYTHONWARNINGS=ignore python3 -m backend &)
+	@. .venv/bin/activate && (LOG_DEPTH=minimal PYTHONWARNINGS=ignore python3 -m backend.run_server &)
 
 # Preprocess audio: compute features for a folder of sounds
 # Usage: make preprocess FOLDER=sounds/Foley
 preprocess: check-env
-	. .venv/bin/activate && python3 -m backend.mass_preprocess
+	. .venv/bin/activate && python3 backend/mass_preprocess.py
 
 
 ##### Individual commands for flexibility #####
@@ -74,7 +74,7 @@ install:
 
 # Run the HTTP server
 run-udp: check-env kill-server
-	. .venv/bin/activate && python3 -m backend
+	. .venv/bin/activate && python3 -m backend.run_server
 	@echo "Server running. Use Ctrl+C to stop."
 
 # Open the Max/MSP frontend patch
