@@ -60,12 +60,20 @@ class BufferManager:
         return True
 
 
-    def write_buffer(self, audio_array: np.array = None, buffer_name: str = 'output', folder_name: str = (os.getcwd()+'/data/audio'), save_plot: bool = False) -> bool:
+    def write_buffer(self, audio_array: np.array = None, buffer_name: str = 'output', folder_name: str = 'data/audio', save_plot: bool = False) -> bool:
         """Write an audio np:array to a named file. Optionally save a spectrogram plot.
+        Returns:
+            bool: True if created, False if not."""
+        import sys
+        if getattr(sys, 'frozen', False):
+            project_root = os.path.dirname(sys.executable)
+        else:
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+        if not os.path.isabs(folder_name):
+            folder_name = os.path.join(project_root, folder_name)
         
-        Test:
-        test_writing
-        """
+        
         sr = 44100
         audio = audio_array
         filepath = os.path.join(folder_name, buffer_name) + ".wav"

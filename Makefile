@@ -83,8 +83,23 @@ open-frontend:
 	@echo "Frontend opened in Max/MSP. Make sure to run the server separately."
 
 
+APP_NAME=run_server
+
 compile:
-	./.venv/bin/python -m PyInstaller --noconfirm udp_communication.spec
+	
+	pyinstaller backend/run_server.py \
+		--name $(APP_NAME) \
+		--onefile \
+		--collect-submodules backend \
+		--collect-all torch \
+		--collect-all numpy
+
+	# Copy extra folders into dist
+	cp -r frontend dist/
+	cp -r data dist/
+
+clean:
+	rm -rf build dist __pycache__ *.spec
 
 clean:	
 	rm -rf build .mypy_cache script.spec

@@ -6,10 +6,26 @@ import warnings
 import logging
 import numpy as np
 import torch
+# import sys
+
+# def get_project_root():
+#     if getattr(sys, 'frozen', False):
+#         return os.path.dirname(sys.executable)
+#     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# PROJECT_ROOT = get_project_root()
+
+# # Add PROJECT_ROOT and _internal path for frozen app
+# if PROJECT_ROOT not in sys.path:
+#     sys.path.insert(0, PROJECT_ROOT)
+
+# # For frozen apps, also add the _internal directory
+# internal_path = os.path.join(PROJECT_ROOT, '_internal')
+# if os.path.exists(internal_path) and internal_path not in sys.path:
+#     sys.path.insert(0, internal_path)
 
 from backend.utilities.load_audio import BufferManager
 from backend.timbre_VAE.load_generative_model import Model, LatentRepresentation
-# ControlModel
 from backend.timbre_VAE.logger import RequestLogger
 from backend.timbre_VAE.vae_train import prepare_data, VAE, train_vae
 from backend.timbre_VAE.features import batch_compute_features, get_features
@@ -57,9 +73,9 @@ gen_model = None  # Loaded in start_server()
 
 # --- CONFIGURATION (defaults – nothing heavy happens here) ---
 # model_type = 'RAVE'           # or 'STABLE_AUDIO'
-model_location = './data/models/StableAudio/stable-ae-float32-torch25x.ts'
+model_location = 'data/models/StableAudio/stable-ae-float32-torch25x.ts'
 feature_type = 'pca'          # or 'raw_features', 'audio_commons'
-sample_folder = './data/eg_sounds/Foley'
+sample_folder = 'data/eg_sounds/Foley'
 
 # --- Mutable state (initialised lazily by handlers) ---
 feature_paths = None
