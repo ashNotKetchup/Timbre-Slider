@@ -99,22 +99,19 @@ compile:
 	cp -r data dist/
 
 clean:
-	rm -rf build dist __pycache__ *.spec
-
-clean:	
-	rm -rf build .mypy_cache script.spec
+	rm -rf build __pycache__ .mypy_cache *.spec
 
 build:
-	$(MAKE) clean
+	$(MAKE) purge
 	$(MAKE) compile
 	$(MAKE) clean
 
 build_debug: clean compile
 
 purge:
-	rm -rf build dist __pycache__ .mypy_cache script.spec
+	rm -rf build dist __pycache__ .mypy_cache *.spec
 
 
 test:
 	$(MAKE) build
-	/Users/ash/Documents/GitHub/Timbre-Slider/dist/udp_communication
+	/Users/ash/Documents/GitHub/Timbre-Slider/dist/run_server

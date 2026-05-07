@@ -51,22 +51,24 @@ def batch_compute_features(sound_files, root_folder='sounds', use_recon=True, mo
     '''
     feature_types = feature_type if isinstance(feature_type, list) else [feature_type]
     audio_features_lists = {ft: [] for ft in feature_types}
-
+    print(f'[Debug 0] Starting batch feature computation for {len(sound_files)} files with types: {feature_types}')
     for ft in feature_types:
         if ft not in ['raw_features', 'audio_commons', 'PCA', 'pca']:
             raise ValueError(f"Unsupported feature_type: {ft}")
 
-    for sound_file in tqdm(sound_files, desc="Computing features", unit="file", ncols=80):
+    for sound_file in sound_files: #tqdm(sound_files, desc="Computing features", unit="file", ncols=80):
         path = os.path.join(root_folder, sound_file)
         if use_recon and model is None:
             raise ValueError("Model must be provided if use_recon is True.")
 
         y, sr = li.load(path, sr=None)
+        print(f'[Debug: 1] Loaded {sound_file} with shape {y.shape} and sr {sr}')
         with torch.no_grad():
             enc = model.encode(y)[0]
             y_recon = model.decode(enc) if use_recon else None
-
+        print(f'[Debug: 2] Encoded {sound_file} to shape {enc.shape}')
         for ft in feature_types:
+            print(f'[Debug: 3] Computing features for {sound_file} with feature type {ft}')
             if ft == 'raw_features' or ft == 'pca' or ft == 'PCA':
                 features = {
                     'spectral_centroid': (li.feature.spectral_centroid(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_centroid(y=y_recon, sr=sr)),

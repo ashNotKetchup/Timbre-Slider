@@ -110,9 +110,9 @@ Copy `.env.example` to `.env` and fill in:
 |---|---|
 | `make setup` | Create venv, install deps, init submodule, create `.env` |
 | `make download-model` | Download & cache Stable Audio Open weights (~1.2 GB) |
-| `make launch-interface` | Minimal mode: show only `(Re)Launchin MALT server on :5000`, then open frontend |
-| `make restart-server` | Minimal mode: show only `(Re)Launchin MALT server on :5000` |
-| `make run-udp` | Stop existing :5000 server, then start the HTTP server only |
+| `make launch-interface` | Minimal mode: show only `(Re)Launchin MALT server on :5001`, then open frontend |
+| `make restart-server` | Minimal mode: show only `(Re)Launchin MALT server on :5001` |
+| `make run-udp` | Stop existing :5001 server, then start the HTTP server only |
 | `make open-frontend` | Open the Max/MSP patch only |
 | `make preprocess` | Batch-compute features for audio in `sounds/` |
 | `make install` | Reinstall deps in existing venv |

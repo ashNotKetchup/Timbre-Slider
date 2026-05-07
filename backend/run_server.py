@@ -32,37 +32,49 @@ from backend.timbre_VAE.features import batch_compute_features, get_features
 
 
 print(f'torch version: {torch.__version__}')
-# --- CONSOLE LOG DEPTH ---
-LOG_DEPTH = os.getenv("LOG_DEPTH", "normal").strip().lower()
-if LOG_DEPTH in {"minimal", "quiet", "silent", "0"}:
-    warnings.filterwarnings("ignore")
-    logging.disable(logging.WARNING)
-    _original_print = builtins.print
+# # --- CONSOLE LOG DEPTH ---
+# LOG_DEPTH = os.getenv("LOG_DEPTH", "normal").strip().lower()
+# if LOG_DEPTH in {"minimal", "quiet", "silent", "0"}:
+#     warnings.filterwarnings("ignore")
+#     logging.disable(logging.WARNING)
+#     _original_print = builtins.print
 
-    def _minimal_print(*args, **kwargs):
-        msg = " ".join(str(a) for a in args).lstrip()
-        starts_with_bracket = msg.startswith("[")
-        looks_like_warning = (
-            "warning" in msg.lower()
-            or msg.startswith("UserWarning")
-            or msg.startswith("FutureWarning")
-            or msg.startswith("DeprecationWarning")
-        )
-        looks_like_error = (
-            "error" in msg.lower()
-            or "exception" in msg.lower()
-            or "traceback" in msg.lower()
-            or "✗" in msg
-        )
+#     def _minimal_print(*args, **kwargs):
+#         msg = " ".join(str(a) for a in args).lstrip()
+#         starts_with_bracket = msg.startswith("[")
+#         looks_like_warning = (
+#             "warning" in msg.lower()
+#             or msg.startswith("UserWarning")
+#             or msg.startswith("FutureWarning")
+#             or msg.startswith("DeprecationWarning")
+#         )
+#         looks_like_error = (
+#             "error" in msg.lower()
+#             or "exception" in msg.lower()
+#             or "traceback" in msg.lower()
+#             or "✗" in msg
+#         )
 
-        # In minimal mode: hide bracket-prefixed logs and warnings, keep errors.
-        if (starts_with_bracket or looks_like_warning) and not looks_like_error:
-            return
-        _original_print(*args, **kwargs)
+#         # In minimal mode: hide bracket-prefixed logs and warnings, keep errors.
+#         if (starts_with_bracket or looks_like_warning) and not looks_like_error:
+#             return
+#         _original_print(*args, **kwargs)
 
-    builtins.print = _minimal_print
+#     builtins.print = _minimal_print
+
+# Set up paths relative to this script's location
+# import os
+import sys
+
+if getattr(sys, 'frozen', False):
+    # Running as a PyInstaller exe
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    # Running as a normal script
+    BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 
 
+print(BASE_DIR)  # useful for debugging
 
 # --- SETUP LIGHTWEIGHT DEPENDENCIES –––
 request_logger = RequestLogger()
@@ -73,9 +85,9 @@ gen_model = None  # Loaded in start_server()
 
 # --- CONFIGURATION (defaults – nothing heavy happens here) ---
 # model_type = 'RAVE'           # or 'STABLE_AUDIO'
-model_location = 'data/models/StableAudio/stable-ae-float32-torch25x.ts'
+model_location = os.path.join(BASE_DIR, 'data', 'models', 'StableAudio', 'stable-ae-float32-torch25x.ts')
 feature_type = 'pca'          # or 'raw_features', 'audio_commons'
-sample_folder = 'data/eg_sounds/Foley'
+sample_folder = os.path.join(BASE_DIR, 'data', 'eg_sounds', 'Foley')
 
 # --- Mutable state (initialised lazily by handlers) ---
 feature_paths = None
@@ -396,11 +408,11 @@ UDP Server Message Types:
 """
 
 class SimpleHandler(BaseHTTPRequestHandler):
-    def log_message(self, format, *args):
-        # Silence default HTTP access logs in minimal mode.
-        if LOG_DEPTH in {"minimal", "quiet", "silent", "0"}:
-            return
-        super().log_message(format, *args)
+    # def log_message(self, format, *args):
+    #     # Silence default HTTP access logs in minimal mode.
+    #     if LOG_DEPTH in {"minimal", "quiet", "silent", "0"}:
+    #         return
+    #     super().log_message(format, *args)
 
     def do_POST(self):
         length = int(self.headers.get('Content-Length', 0))
@@ -433,6 +445,11 @@ class SimpleHandler(BaseHTTPRequestHandler):
         print(f"← {reply['type']}")
 
 
+def kill_existing_port_process(port):
+    """Kill any existing process listening on the specified port."""
+    os.system(f"lsof -ti :{port} 2>/dev/null | xargs kill -9 2>/dev/null; sleep 0.2")
+
+
 def start_server():
     """Initialize and start the UDP communication server."""
     global gen_model
@@ -450,13 +467,19 @@ def start_server():
         raise
 
     # Create and start server
-    server = HTTPServer(("127.0.0.1", 5000), SimpleHandler)
-    print("\n🎛  MALT server listening on http://127.0.0.1:5000\n")
+    port_number = 5000
+    print(f'launching server on port {port_number}')
+    kill_existing_port_process(port_number)  # Ensure port is free
+    server = HTTPServer(("127.0.0.1", port_number), SimpleHandler)
+    server.allow_reuse_address = True  # Allow reusing port immediately
+    print(f"\n🎛  MALT server listening on http://127.0.0.1:{port_number}\n")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\n[server] Shutting down...")
         server.shutdown()
+    finally:
+        server.server_close()  # Ensure socket is fully released
 
 
 if __name__ == "__main__":

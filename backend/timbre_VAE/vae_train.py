@@ -227,7 +227,7 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
         plt.ion()  # Turn on interactive mode
         fig, ax = plt.subplots(figsize=(8, 5))
         
-    for epoch in tqdm(range(epochs), desc="Training VAE", unit="epoch", ncols=80):
+    for epoch in range(epochs): #tqdm(range(epochs), desc="Training VAE", unit="epoch", ncols=80):
         perm = torch.randperm(latent_data.size(0))
         total_loss = 0
         recon_epoch = 0
