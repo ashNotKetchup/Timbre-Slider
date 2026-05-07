@@ -4,8 +4,8 @@ import torch.optim as optim
 import numpy as np
 from itertools import product
 from scipy.interpolate import interp1d
-from tqdm import tqdm
-
+# from tqdm import tqdm
+from .progress import increment_progress_bar, clear_lines
 def resample_array(array, target_len, kind='cubic', smooth=False):
     """Interpolate array to target_len. Avoids ringing artifacts from FFT resampling."""
     if array.shape[0] == target_len:
@@ -228,6 +228,7 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
         fig, ax = plt.subplots(figsize=(8, 5))
         
     for epoch in range(epochs): #tqdm(range(epochs), desc="Training VAE", unit="epoch", ncols=80):
+        increment_progress_bar(epoch + 1, epochs, description="Training VAE")
         perm = torch.randperm(latent_data.size(0))
         total_loss = 0
         recon_epoch = 0
@@ -300,6 +301,8 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
             ax.legend(loc='upper right')
             plt.draw()
             plt.pause(0.001)
+        if epoch != epochs - 1:
+            clear_lines()
 
     if plot_loss:
         plt.ioff()

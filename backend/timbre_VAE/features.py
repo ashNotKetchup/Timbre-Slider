@@ -8,7 +8,8 @@ import timbral_models
 import pickle
 import pandas as pd
 from sklearn.decomposition import PCA
-from tqdm import tqdm
+# from tqdm import tqdm
+from .progress import increment_progress_bar, clear_lines
 
 def audio_features(audio_y, sr=44100, use_mean=False, feature_type='raw_features'):
     '''Compute timbre features for each audio file and its encoding'''
@@ -57,6 +58,7 @@ def batch_compute_features(sound_files, root_folder='sounds', use_recon=True, mo
             raise ValueError(f"Unsupported feature_type: {ft}")
 
     for sound_file in sound_files: #tqdm(sound_files, desc="Computing features", unit="file", ncols=80):
+        increment_progress_bar(sound_files.index(sound_file) + 1, len(sound_files), description="Computing features")
         path = os.path.join(root_folder, sound_file)
         if use_recon and model is None:
             raise ValueError("Model must be provided if use_recon is True.")
@@ -102,6 +104,9 @@ def batch_compute_features(sound_files, root_folder='sounds', use_recon=True, mo
                 )
             except Exception as e:
                 print(f"[features] ✗ {sound_file}: {e}")
+        if sound_file != len(sound_files) - 1:
+            clear_lines()
+
 
     key_features_dict = {}
     pca_dict = {}
