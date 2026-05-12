@@ -176,12 +176,17 @@ def handle_request_retrain_vae(message):
         # Load features for sample — compute raw features, PCA is applied on the combined set
         if gen_model is None:
             raise ValueError("gen_model is None - cannot compute features for sample!")
-        sample_sound_features, _, _ = batch_compute_features([audio_path], root_folder='', use_recon=True, model=gen_model, feature_type=compute_type)
         
         # Append the example features to the main sound_data list
-        if sample_sound_features:
-            sound_data = sound_data + sample_sound_features
+        if audio_path and os.path.isfile(audio_path):
+            sample_sound_features, _, _ = batch_compute_features([audio_path], root_folder='', use_recon=True, model=gen_model, feature_type=compute_type)
+            if sample_sound_features:
+                sound_data = sound_data + sample_sound_features
         print(f"[retrain] {len(sound_data)} samples (incl. example)")
+
+        if audio_path is None and active_folder:
+            audio_path = os.path.join(active_folder, 
+                                      [f for f in os.listdir(active_folder) if f.endswith(('.wav', '.aif', '.mp3', '.ogg'))][0])
 
         # Re-run feature selection on the combined data so all samples share the same keys
         if feature_type in ('pca', 'PCA'):
