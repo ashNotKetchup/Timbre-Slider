@@ -206,6 +206,7 @@ def handle_request_retrain_vae(message):
         #     latent_dim_new = len(metadata_vectors[0][0]) if metadata_vectors and hasattr(metadata_vectors[0], '__getitem__') else latent_data.shape[1]
         #     print(f"Adjusted input_dim_new: {input_dim_new}, latent_dim_new: {latent_dim_new}")
         # print("Initializing VAE...")
+        print(f'[retrain] Initialised with input dim {input_dim_new}, {latent_dim_new}')
         vae = VAE(input_dim=input_dim_new, latent_dim=latent_dim_new)
         vae, loss_lists, loss_labels = train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=1024, learning_rate=1e-2, plot_loss=False)
         print(f"[retrain] VAE trained — final loss: {loss_lists[0][-1]:.1f}")

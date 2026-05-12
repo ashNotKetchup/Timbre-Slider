@@ -50,6 +50,11 @@ def batch_compute_features(sound_files, root_folder='sounds', use_recon=True, mo
     Returns a list of dictionaries with audio data, encodings, and features for each sound file.
     If feature_type is a list, returns dictionaries of these outputs mapped by feature type.
     '''
+
+    # Strip control model to avoid accidentally using it for feature extraction
+    if model.control_model is not None:
+        model.control_model = None
+
     feature_types = feature_type if isinstance(feature_type, list) else [feature_type]
     audio_features_lists = {ft: [] for ft in feature_types}
     print(f'[Debug 0] Starting batch feature computation for {len(sound_files)} files with types: {feature_types}')
