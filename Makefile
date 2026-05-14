@@ -5,34 +5,6 @@
 LOG_DEPTH ?= normal
 KILL_SERVER_SILENT ?= 0
 
-# ---------- Full setup (first time) ----------
-
-# Clone submodule, create venv, install deps, download model, check .env
-setup: init-submodule
-	python3 -m venv .venv
-	. .venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt
-	@[ -f .env ] || (cp .env.example .env && echo "\n⚠️  Created .env from template — edit it to add your HF_TOKEN\n   Get one at https://huggingface.co/settings/tokens")
-	@echo "\n✅ Setup complete. Next steps:"
-	@echo "   1. Edit .env with your HuggingFace token"
-	@echo "   2. Run 'make download-model' to cache the Stable Audio model"
-	@echo "   3. Run 'make launch-interface' to start"
-
-# Initialise the streamable-stable-audio-open submodule
-init-submodule:
-	git submodule update --init --recursive
-
-# Check that .env has a real token
-check-env:
-	@[ -f .env ] || (echo "❌ .env file not found. Run: cp .env.example .env" && exit 1)
-	@token=$$(awk -F= '/^[[:space:]]*HF_TOKEN[[:space:]]*=/{v=$$2; gsub(/^[[:space:]]+|[[:space:]]+$$/,"",v); gsub(/^"|"$$/,"",v); print v; exit}' .env); \
-	if [ -z "$$token" ] || [ "$$token" = "hf_your_token_here" ] || ! echo "$$token" | grep -Eq '^hf_[A-Za-z0-9]+'; then \
-		echo "⚠️  HF_TOKEN in .env looks like a placeholder — update it with your real token"; \
-	fi
-
-# Download Stable Audio Open 1.0 model weights (cached in ~/.cache/huggingface)
-download-model: check-env
-	. .venv/bin/activate && python3 backend/download_model.py
-
 # ---------- Run ----------
 
 # Kill any process currently listening on port 5000
@@ -97,6 +69,7 @@ compile:
 	# Copy extra folders into dist
 	cp -r frontend dist/
 	cp -r data dist/
+	cp how-to.md dist/
 
 clean:
 	rm -rf build __pycache__ .mypy_cache *.spec
