@@ -65,7 +65,7 @@ MANIFEST
 ## Dists
 dist/
 backend_dist
-# *.spec
+*.spec
 
 # Installer logs
 pip-log.txt
