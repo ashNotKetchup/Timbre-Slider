@@ -5,6 +5,9 @@
 # Data files
 *.pkl
 
+
+
+
 # Audio files
 *.wav
 *.aif
@@ -13,6 +16,7 @@
 *.ogg
 *.flac
 *.m4a
+*'test sounds'/
 
 # Ableton metadata
 *.asd
@@ -58,6 +62,9 @@ MANIFEST
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
+## Dists
+dist/
+backend_dist
 *.spec
 
 # Installer logs

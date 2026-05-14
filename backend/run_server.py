@@ -4,62 +4,90 @@ import os
 import builtins
 import warnings
 import logging
-import random
 import numpy as np
 import torch
+# import sys
+
+# def get_project_root():
+#     if getattr(sys, 'frozen', False):
+#         return os.path.dirname(sys.executable)
+#     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# PROJECT_ROOT = get_project_root()
+
+# # Add PROJECT_ROOT and _internal path for frozen app
+# if PROJECT_ROOT not in sys.path:
+#     sys.path.insert(0, PROJECT_ROOT)
+
+# # For frozen apps, also add the _internal directory
+# internal_path = os.path.join(PROJECT_ROOT, '_internal')
+# if os.path.exists(internal_path) and internal_path not in sys.path:
+#     sys.path.insert(0, internal_path)
+
+from backend.utilities.load_audio import BufferManager
+from backend.timbre_VAE.load_generative_model import Model, LatentRepresentation
+from backend.timbre_VAE.logger import RequestLogger
+from backend.timbre_VAE.vae_train import prepare_data, VAE, train_vae
+from backend.timbre_VAE.features import batch_compute_features, get_features
 
 
-# --- CONSOLE LOG DEPTH ---
-LOG_DEPTH = os.getenv("LOG_DEPTH", "normal").strip().lower()
-if LOG_DEPTH in {"minimal", "quiet", "silent", "0"}:
-    warnings.filterwarnings("ignore")
-    logging.disable(logging.WARNING)
-    _original_print = builtins.print
+print(f'torch version: {torch.__version__}')
+# # --- CONSOLE LOG DEPTH ---
+# LOG_DEPTH = os.getenv("LOG_DEPTH", "normal").strip().lower()
+# if LOG_DEPTH in {"minimal", "quiet", "silent", "0"}:
+#     warnings.filterwarnings("ignore")
+#     logging.disable(logging.WARNING)
+#     _original_print = builtins.print
 
-    def _minimal_print(*args, **kwargs):
-        msg = " ".join(str(a) for a in args).lstrip()
-        starts_with_bracket = msg.startswith("[")
-        looks_like_warning = (
-            "warning" in msg.lower()
-            or msg.startswith("UserWarning")
-            or msg.startswith("FutureWarning")
-            or msg.startswith("DeprecationWarning")
-        )
-        looks_like_error = (
-            "error" in msg.lower()
-            or "exception" in msg.lower()
-            or "traceback" in msg.lower()
-            or "✗" in msg
-        )
+#     def _minimal_print(*args, **kwargs):
+#         msg = " ".join(str(a) for a in args).lstrip()
+#         starts_with_bracket = msg.startswith("[")
+#         looks_like_warning = (
+#             "warning" in msg.lower()
+#             or msg.startswith("UserWarning")
+#             or msg.startswith("FutureWarning")
+#             or msg.startswith("DeprecationWarning")
+#         )
+#         looks_like_error = (
+#             "error" in msg.lower()
+#             or "exception" in msg.lower()
+#             or "traceback" in msg.lower()
+#             or "✗" in msg
+#         )
 
-        # In minimal mode: hide bracket-prefixed logs and warnings, keep errors.
-        if (starts_with_bracket or looks_like_warning) and not looks_like_error:
-            return
-        _original_print(*args, **kwargs)
+#         # In minimal mode: hide bracket-prefixed logs and warnings, keep errors.
+#         if (starts_with_bracket or looks_like_warning) and not looks_like_error:
+#             return
+#         _original_print(*args, **kwargs)
 
-    builtins.print = _minimal_print
+#     builtins.print = _minimal_print
 
-from timbre_VAE.load_audio import BufferManager
-from timbre_VAE.load_generative_model import Model, LatentRepresentation, ControlModel
-from timbre_VAE.logger import RequestLogger
-from timbre_VAE.vae_train import prepare_data, VAE, train_vae
-from timbre_VAE.features import batch_compute_features, get_features
+# Set up paths relative to this script's location
+# import os
+import sys
 
+if getattr(sys, 'frozen', False):
+    # Running as a PyInstaller exe
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    # Running as a normal script
+    BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+
+
+print(BASE_DIR)  # useful for debugging
 
 # --- SETUP LIGHTWEIGHT DEPENDENCIES –––
 request_logger = RequestLogger()
 latent_representation = LatentRepresentation()
 audio_handler = BufferManager()
+gen_model = None  # Loaded in start_server()
 
 
 # --- CONFIGURATION (defaults – nothing heavy happens here) ---
 # model_type = 'RAVE'           # or 'STABLE_AUDIO'
-model_type = 'STABLE_AUDIO' 
-model_name = 'percussion'
-model_location = f'timbre_VAE/models/RAVE_models/generative_models/{model_name}.ts'
-vae_path = 'precomputed/control_models/Foley_STABLE_AUDIO_audio_commons_preprocessed_sound_data_EX_Noise_120_waterfall_creaks_vae.pt'
+model_location = os.path.join(BASE_DIR, 'data', 'models', 'StableAudio', 'stable-ae-float32-torch25x.ts')
 feature_type = 'pca'          # or 'raw_features', 'audio_commons'
-sample_folder = 'sounds/Foley'
+sample_folder = os.path.join(BASE_DIR, 'data', 'eg_sounds', 'Foley')
 
 # --- Mutable state (initialised lazily by handlers) ---
 feature_paths = None
@@ -67,11 +95,6 @@ folder_path = None
 audio_path = None
 metadata_keys = None
 timbre_gen_model = None
-
-# Load generative model eagerly — it's needed for almost every request
-print(f"\n── Loading generative model ({model_type}) …")
-gen_model = Model(model_type=model_type, model_path=[model_location])
-print("── Generative model ready.\n")
 
 # --- NEW: Handler for loading a folder, computing features, and retraining VAE ---
 _last_loaded_features = {
@@ -91,11 +114,10 @@ def handle_request_load_folder(message):
     if not folder_path or not os.path.isdir(folder_path):
         return {"type": "error", "content": f"Invalid folder path: {folder_path}"}
     try:
-        from mass_preprocess import mass_preprocess
+        from backend.utilities.mass_preprocess import mass_preprocess
         # Compute features (or use precomputed)
         feature_paths = mass_preprocess(folder_path, 
-                                        model_name=model_name, 
-                                        model_type=model_type, 
+                                        gen_model, 
                                         overwrite=False)
         cache_key = 'raw_features' if feature_type in ('pca', 'PCA') else feature_type
         feature_save_path = feature_paths[cache_key]
@@ -118,7 +140,7 @@ def handle_request_load_folder(message):
 # New: Handler for retraining VAE using last loaded features
 def handle_request_retrain_vae(message):
     global feature_paths, folder_path, audio_path, metadata_keys, _last_loaded_features
-    global timbre_gen_model
+    global timbre_gen_model, gen_model
     print("[retrain] Starting VAE retrain …")
     try:
         # Determine which folder to use
@@ -138,6 +160,10 @@ def handle_request_retrain_vae(message):
         print(f"[retrain] Feature source: {feature_save_path or 'computing fresh'}")
         # PCA uses raw_features underneath — load/compute as raw_features, project later
         compute_type = 'raw_features' if feature_type in ('pca', 'PCA') else feature_type
+        
+        if gen_model is None:
+            raise ValueError("gen_model is None - generative model not loaded!")
+        
         sound_data, metadata_keys, pca = get_features(
             [f for f in os.listdir(active_folder) if f.endswith(('.wav', '.aif', '.mp3', '.ogg'))],
             compute_type,
@@ -148,21 +174,28 @@ def handle_request_retrain_vae(message):
         )
 
         # Load features for sample — compute raw features, PCA is applied on the combined set
-        sample_sound_features, _, _ = batch_compute_features([audio_path], root_folder='', use_recon=True, model=gen_model, feature_type=compute_type)
+        if gen_model is None:
+            raise ValueError("gen_model is None - cannot compute features for sample!")
         
         # Append the example features to the main sound_data list
-        if sample_sound_features:
-            sound_data = sound_data + sample_sound_features
+        if audio_path and os.path.isfile(audio_path):
+            sample_sound_features, _, _ = batch_compute_features([audio_path], root_folder='', use_recon=True, model=gen_model, feature_type=compute_type)
+            if sample_sound_features:
+                sound_data = sound_data + sample_sound_features
         print(f"[retrain] {len(sound_data)} samples (incl. example)")
+
+        if audio_path is None and active_folder:
+            audio_path = os.path.join(active_folder, 
+                                      [f for f in os.listdir(active_folder) if f.endswith(('.wav', '.aif', '.mp3', '.ogg'))][0])
 
         # Re-run feature selection on the combined data so all samples share the same keys
         if feature_type in ('pca', 'PCA'):
-            from timbre_VAE.features import pca_attributes
+            from backend.timbre_VAE.features import pca_attributes
             metadata_keys, reduced_dicts, pca = pca_attributes(sound_data, 'features_recon')
             for i, rd in enumerate(reduced_dicts):
                 sound_data[i]['features_recon'] = rd
         else:
-            from timbre_VAE.features import filter_attributes
+            from backend.timbre_VAE.features import filter_attributes
             metadata_keys, _ = filter_attributes(sound_data, 'features_recon')
 
         print(f"[retrain] {len(metadata_keys)} feature dims selected")
@@ -178,11 +211,14 @@ def handle_request_retrain_vae(message):
         #     latent_dim_new = len(metadata_vectors[0][0]) if metadata_vectors and hasattr(metadata_vectors[0], '__getitem__') else latent_data.shape[1]
         #     print(f"Adjusted input_dim_new: {input_dim_new}, latent_dim_new: {latent_dim_new}")
         # print("Initializing VAE...")
+        print(f'[retrain] Initialised with input dim {input_dim_new}, {latent_dim_new}')
         vae = VAE(input_dim=input_dim_new, latent_dim=latent_dim_new)
         vae, loss_lists, loss_labels = train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=1024, learning_rate=1e-2, plot_loss=False)
         print(f"[retrain] VAE trained — final loss: {loss_lists[0][-1]:.1f}")
         # Update global model (in-memory)
-        timbre_gen_model = Model(model_type=model_type, model_path=[model_location], control_vae_path=None, control_vae_input_dim=input_dim_new, control_vae_latent_dim=latent_dim_new)
+        timbre_gen_model = gen_model
+        timbre_gen_model.control_vae_input_dim=input_dim_new
+        timbre_gen_model.control_vae_latent_dim=latent_dim_new
         timbre_gen_model.control_model = vae
         print(f"[retrain] Model updated for {_last_loaded_features['folder_path']}")
         # Encode the example audio with the new VAE and include latent in reply
@@ -378,11 +414,11 @@ UDP Server Message Types:
 """
 
 class SimpleHandler(BaseHTTPRequestHandler):
-    def log_message(self, format, *args):
-        # Silence default HTTP access logs in minimal mode.
-        if LOG_DEPTH in {"minimal", "quiet", "silent", "0"}:
-            return
-        super().log_message(format, *args)
+    # def log_message(self, format, *args):
+    #     # Silence default HTTP access logs in minimal mode.
+    #     if LOG_DEPTH in {"minimal", "quiet", "silent", "0"}:
+    #         return
+    #     super().log_message(format, *args)
 
     def do_POST(self):
         length = int(self.headers.get('Content-Length', 0))
@@ -415,6 +451,42 @@ class SimpleHandler(BaseHTTPRequestHandler):
         print(f"← {reply['type']}")
 
 
-server = HTTPServer(("127.0.0.1", 5000), SimpleHandler)
-print("\n🎛  MALT server listening on http://127.0.0.1:5000\n")
-server.serve_forever()
+def kill_existing_port_process(port):
+    """Kill any existing process listening on the specified port."""
+    os.system(f"lsof -ti :{port} 2>/dev/null | xargs kill -9 2>/dev/null; sleep 0.2")
+
+
+def start_server():
+    """Initialize and start the UDP communication server."""
+    global gen_model
+
+    
+    # Load generative model eagerly — it's needed for almost every request
+    print(f"\n── Loading generative model ({model_location}) …")
+    try:
+        gen_model = Model(model_path=model_location)
+        print("── Generative model ready.\n")
+    except Exception as e:
+        print(f"✗ Failed to load generative model: {e}")
+        print(f"  model_location: {model_location}")
+        # print(f"  model_type: {model_type}")
+        raise
+
+    # Create and start server
+    port_number = 5000
+    print(f'launching server on port {port_number}')
+    kill_existing_port_process(port_number)  # Ensure port is free
+    server = HTTPServer(("127.0.0.1", port_number), SimpleHandler)
+    server.allow_reuse_address = True  # Allow reusing port immediately
+    print(f"\n🎛  MALT server listening on http://127.0.0.1:{port_number}\n")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n[server] Shutting down...")
+        server.shutdown()
+    finally:
+        server.server_close()  # Ensure socket is fully released
+
+
+if __name__ == "__main__":
+    start_server()

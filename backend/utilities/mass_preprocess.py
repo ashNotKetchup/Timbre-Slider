@@ -1,17 +1,16 @@
 
-from timbre_VAE.features import get_features
-from timbre_VAE.load_generative_model import Model
+from ..timbre_VAE.features import get_features
+from ..timbre_VAE.load_generative_model import Model
 import os
 
-def mass_preprocess(sample_folder, model_name='nasa', model_type='STABLE_AUDIO', feature_types=None, sr=44100, overwrite=True):
+def mass_preprocess(sample_folder, model, label=None, feature_types=None, sr=44100, overwrite=True):
     """
     Compute features for all audio files in a folder for the given model and feature types.
     Returns a dict mapping feature_type to the path of the saved features file.
     """
     if feature_types is None:
         feature_types = ['raw_features', 'audio_commons', 'pca']  # Default feature types to compute
-    model_location = f'timbre_VAE/models/RAVE_models/generative_models/{model_name}.ts'
-    model = Model(model_type=model_type, model_path=[model_location])
+
     sound_files = [
         f for f in os.listdir(sample_folder)
         if f.endswith(('.wav', '.aif', '.mp3', '.ogg'))
@@ -22,7 +21,7 @@ def mass_preprocess(sample_folder, model_name='nasa', model_type='STABLE_AUDIO',
     if compute_types:
         feature_save_base = os.path.join(
             sample_folder,
-            f"{os.path.basename(sample_folder)}_{model_type}"
+            f"{os.path.basename(sample_folder)}_{label}"
         )
         print(f'[preprocess] {len(sound_files)} files × {compute_types} in {os.path.basename(sample_folder)}')
         
@@ -46,6 +45,10 @@ def mass_preprocess(sample_folder, model_name='nasa', model_type='STABLE_AUDIO',
         results['PCA'] = results['raw_features']
     return results
 
-# If run as a script, keep old behavior
-if __name__ == "__main__":
-    mass_preprocess('sounds/umru')
+# # If run as a script, keep old behavior
+# if __name__ == "__main__":
+#     mass_preprocess('sounds/umru', )
+
+# def main():
+#     """Entry point for the mass_preprocess script."""
+#     mass_preprocess('sounds/umru')
