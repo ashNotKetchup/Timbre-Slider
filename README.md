@@ -13,7 +13,7 @@ MALT encodes audio into a neural latent space (via RAVE or Stable Audio Open 1.0
 
 ## 👤 For Users
 
-**Want to use the app?** See our [Releases](../../releases) page for pre-built packages, then read [`how-to.md`](how-to.md) for usage instructions.
+**Want to use the app?** See the [Releases](../../releases) page for pre-built packages, then read [`how-to.md`](how-to.md) for usage instructions.
 
 ## 🛠️ For Developers
 
