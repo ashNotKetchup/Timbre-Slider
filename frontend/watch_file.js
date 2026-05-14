@@ -15,8 +15,10 @@ const fullPath = path.resolve("../data/audio/output.wav")
 
 maxApi.outlet(fullPath);
 
+
 console.log(`Watching file: ${fullPath}`);
 maxApi.outlet(fullPath);
+
 fs.watch(fullPath, (eventType, filename) => {
   if (filename) {
     console.log(`File changed: ${fullPath}`);
