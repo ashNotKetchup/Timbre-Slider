@@ -5,6 +5,10 @@
 # Data files
 *.pkl
 
+# Builds
+*builds/
+*dist/
+*dist_*
 
 
 

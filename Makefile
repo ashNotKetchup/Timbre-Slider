@@ -1,6 +1,6 @@
 # Makefile for MALT workflows
 
-.PHONY: setup install init-submodule check-env download-model run-udp open-frontend launch-interface preprocess restart-server kill-server
+.PHONY: setup install init-submodule check-env download-model run-udp open-frontend launch-interface preprocess restart-server kill-server dist_max dist_standalone
 
 LOG_DEPTH ?= normal
 KILL_SERVER_SILENT ?= 0
@@ -58,7 +58,6 @@ open-frontend:
 APP_NAME=run_server
 
 compile:
-	
 	pyinstaller backend/run_server.py \
 		--name $(APP_NAME) \
 		--onefile \
@@ -66,10 +65,29 @@ compile:
 		--collect-all torch \
 		--collect-all numpy
 
-	# Copy extra folders into dist
-	cp -r frontend dist/
-	cp -r data dist/
-	cp how-to.md dist/
+	@OS=$$(uname -s | tr '[:upper:]' '[:lower:]'); \
+	DIST=dist_max_$$OS; \
+	echo "── Building $$DIST …"; \
+	rm -rf $$DIST && mkdir -p $$DIST; \
+	cp dist/$(APP_NAME) $$DIST/; \
+	cp -r frontend $$DIST/ && rm -rf $$DIST/frontend/builds; \
+	mkdir -p $$DIST/data/models && cp -r data/models/StableAudio $$DIST/data/models/; \
+	cp -r data/eg_sounds $$DIST/data/; \
+	cp how-to.md $$DIST/; \
+	echo "── $$DIST done."
+
+	@OS=$$(uname -s | tr '[:upper:]' '[:lower:]'); \
+	DIST=dist_standalone_$$OS; \
+	echo "── Building $$DIST …"; \
+	LATEST=$$(ls -td frontend/builds/*.app 2>/dev/null | head -1); \
+	if [ -z "$$LATEST" ]; then echo "Error: no .app found in frontend/builds/"; exit 1; fi; \
+	rm -rf $$DIST && mkdir -p $$DIST; \
+	cp dist/$(APP_NAME) $$DIST/; \
+	cp -r "$$LATEST" $$DIST/; \
+	mkdir -p $$DIST/data/models && cp -r data/models/StableAudio $$DIST/data/models/; \
+	cp -r data/eg_sounds $$DIST/data/; \
+	cp how-to.md $$DIST/; \
+	echo "── $$DIST done."
 
 clean:
 	rm -rf build __pycache__ .mypy_cache *.spec

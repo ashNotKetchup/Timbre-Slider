@@ -1,10 +1,22 @@
 # How to Run
 
+There are two versions of this software:
+
+- **Standalone** (`dist_standalone_*`) — no additional software required. Includes a self-contained app.
+- **Max** (`dist_max_*`) — requires Max/MSP to be installed. Includes the Max patch for advanced patching.
+
 ## Installation
 
-1. Download Max/MSP
-2. Run the runserver script - this will launch a server/backend required to encode and decode audio. It needs to be in the same folder as everything else, so don't move it!
-3. A user interface should launch; if not, run `frontend/frontend.maxpat` to get that.
+### Standalone version
+
+1. Run the `run_server` script — this launches the backend server required to encode and decode audio. Keep it in the same folder as everything else.
+2. Open the `frontend.app` included in the folder.
+
+### Max version
+
+1. Download and install [Max/MSP](https://cycling74.com/downloads).
+2. Run the `run_server` script — this launches the backend server. Keep it in the same folder as everything else.
+3. A user interface should launch; if not, open `frontend/frontend.maxpat` manually.
 
 ## Training Model
 
