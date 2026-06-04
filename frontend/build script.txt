@@ -1,1 +1,2 @@
-open thispatcherfolder "Macintosh HD:/Users/ash/Documents/GitHub/Timbre-Slider/frontend"
+open thispatcher
+folder "Macintosh HD:/Users/ash/Documents/GitHub/Timbre-Slider/frontend"
