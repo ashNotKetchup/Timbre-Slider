@@ -1,10 +1,9 @@
-
 import librosa as li
 import numpy as np
 from typing import List
 from functools import reduce
 from ..timbre_VAE.logger import log
-import os
+import tempfile
 import soundfile as sf
 
 
@@ -32,11 +31,12 @@ class BufferManager:
         - set_output_buffer(data: np.ndarray):
             Sets and updates the last written output buffer.
     """
+
     def __init__(self):
         self._input_audio = None
         self._output_audio = None
 
-    def load_buffer(self, sample_file_path: str, buffer_name: str = 'input') -> bool:
+    def load_buffer(self, sample_file_path: str, buffer_name: str = "input") -> bool:
         """
         Load an audio file into a numpy array
 
@@ -51,59 +51,52 @@ class BufferManager:
         """
 
         try:
-             x, sr = li.load(sample_file_path,sr=44100)
-             self.set_input_buffer(np.asarray(x))
+            x, sr = li.load(sample_file_path, sr=44100)
+            self.set_input_buffer(np.asarray(x))
         except Exception as e:
-            log(f"Error creating buffer '{buffer_name}' from file '{sample_file_path}': {e}")
-        log(f"created buffer name: '{buffer_name}' sample_file: '{sample_file_path}, with shape: '{self._input_audio.shape}'")
-        
+            log(
+                f"Error creating buffer '{buffer_name}' from file '{sample_file_path}': {e}"
+            )
+        log(
+            f"created buffer name: '{buffer_name}' sample_file: '{sample_file_path}, with shape: '{self._input_audio.shape}'"
+        )
+
         return True
 
-
-    def write_buffer(self, audio_array: np.array = None, buffer_name: str = 'output', folder_name: str = 'data/audio', save_plot: bool = False) -> bool:
-        """Write an audio np:array to a named file. Optionally save a spectrogram plot.
+    def write_buffer(
+        self, audio_array: np.array = None, save_plot: bool = False
+    ) -> str:
+        """Write an audio np.array to a temporary file. Optionally save a spectrogram plot.
         Returns:
-            bool: True if created, False if not."""
-        import sys
-        if getattr(sys, 'frozen', False):
-            project_root = os.path.dirname(sys.executable)
-        else:
-            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-        if not os.path.isabs(folder_name):
-            folder_name = os.path.join(project_root, folder_name)
-        
-        
+            str: Path to the written audio file."""
         sr = 44100
-        audio = audio_array
-        filepath = os.path.join(folder_name, buffer_name) + ".wav"
-        sf.write(filepath, audio, sr)
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            filepath = f.name
+        sf.write(filepath, audio_array, sr)
         if save_plot:
             try:
                 from ..timbre_VAE.plotting import save_spectrogram
+
                 save_spectrogram(filepath)
             except ImportError:
-                pass  # Plotting dependencies not available (e.g., in PyInstaller bundle)
-        return True
-
+                pass
+        return filepath
 
     def get_input_buffer(self) -> np.ndarray:
         """Get the last read input buffer."""
         return self._input_audio
-    
+
     def get_output_buffer(self) -> np.ndarray:
         """Get the last written output buffer."""
         return self._output_audio
 
     def set_input_buffer(self, data: np.ndarray) -> bool:
         """Set the last read input buffer. Update max buffer too"""
-        self._input_audio = data # store internally
+        self._input_audio = data  # store internally
         # self.write_buffer("input", self._input_audio) # update max buffer
         return True
 
-
-    def set_output_buffer(self, data: np.ndarray, save_plot: bool = False) -> bool:
-        """Set the last written output buffer. Internally, and optionally tell max to update. Optionally save a spectrogram plot."""
+    def set_output_buffer(self, data: np.ndarray, save_plot: bool = False) -> str:
+        """Write data to a temp file and store internally. Returns the path to the written file."""
         self._output_audio = data
-        self.write_buffer(self._output_audio, "output", save_plot=save_plot)
-        return True
+        return self.write_buffer(self._output_audio, save_plot=save_plot)

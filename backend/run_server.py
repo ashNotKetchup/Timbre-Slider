@@ -250,12 +250,13 @@ def handle_request_latent(message):
 
     try:
         if timbre_gen_model is None or timbre_gen_model.control_model is None:
-            audio_handler.set_output_buffer(audio_in)
+            audio_path = audio_handler.set_output_buffer(audio_in,True)
             print("[encode] ⚠ No model trained yet — passthrough input to output")
             print("No model trained yet. Passing input audio through to output.")
             return {
                 "type": "warning",
-                "content": "No model trained yet. Passing input audio through to output."
+                "content": "No model trained yet. Passing input audio through to output.",
+                "audio_path": audio_path
             }
         # Encode with generative model
         latent_vector, latent_text = timbre_gen_model.encode(audio_in)
@@ -304,12 +305,13 @@ def handle_request_audio(message):
         if timbre_gen_model is None or timbre_gen_model.control_model is None:
             passthrough_audio = audio_handler.get_input_buffer()
             if isinstance(passthrough_audio, np.ndarray):
-                audio_handler.set_output_buffer(passthrough_audio, save_plot=True)
+                audio_path = audio_handler.set_output_buffer(passthrough_audio, save_plot=True)
                 print("[decode] ⚠ No model trained yet — passthrough input to output")
                 print("No model trained yet. Passing input audio through to output.")
                 return {
                     "type": "warning",
-                    "content": "No model trained yet. Passing input audio through to output."
+                    "content": "No model trained yet. Passing input audio through to output.",
+                    "audio_path": audio_path
                 }
 
         if not isinstance(latent_data, dict):
@@ -338,8 +340,8 @@ def handle_request_audio(message):
         latent_vector_scaled = latent_vector * scale + bias
         audio_out = timbre_gen_model.decode(latent_vector_scaled, latent_text)
         print("[decode] Done")
-        audio_handler.set_output_buffer(audio_out, save_plot=True)
-        return {"type": "decoded", "content": "Decoded successfully"}
+        audio_path = audio_handler.set_output_buffer(audio_out, save_plot=True)
+        return {"type": "decoded", "content": "Decoded successfully", "audio_path": audio_path}
         
     except Exception as e:
         print(f"[decode] ✗ {e}")
