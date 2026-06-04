@@ -67,14 +67,12 @@ print(f'torch version: {torch.__version__}')
 import sys
 
 if getattr(sys, 'frozen', False):
-    # Running as a PyInstaller exe
-    BASE_DIR = os.path.dirname(sys.executable)
+    # --onefile: data extracted to a temp _MEIPASS dir; --onedir: data sits next to the exe
+    DATA_DIR = os.path.join(getattr(sys, '_MEIPASS', os.path.dirname(sys.executable)), 'data')
 else:
-    # Running as a normal script
-    BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
 
-
-print(BASE_DIR)  # useful for debugging
+print(DATA_DIR)  # useful for debugging
 
 # --- SETUP LIGHTWEIGHT DEPENDENCIES –––
 request_logger = RequestLogger()
@@ -84,10 +82,9 @@ gen_model = None  # Loaded in start_server()
 
 
 # --- CONFIGURATION (defaults – nothing heavy happens here) ---
-# model_type = 'RAVE'           # or 'STABLE_AUDIO'
-model_location = os.path.join(BASE_DIR, 'data', 'models', 'StableAudio', 'stable-ae-float32-torch25x.ts')
+model_location = os.path.join(DATA_DIR, 'models', 'StableAudio', 'stable-ae-float32-torch25x.ts')
 feature_type = 'pca'          # or 'raw_features', 'audio_commons'
-sample_folder = os.path.join(BASE_DIR, 'data', 'eg_sounds', 'Foley')
+sample_folder = os.path.join(DATA_DIR, 'eg_sounds', 'Foley')
 
 # --- Mutable state (initialised lazily by handlers) ---
 feature_paths = None
@@ -374,6 +371,25 @@ def handle_set_regularisation(message):
         return {"type": "error", "content": f"Unknown regularisation type: {reg_type}"}
 
 
+# --- Handler for loading a different generative model ---
+def handle_load_model(message):
+    global gen_model, timbre_gen_model, feature_paths, folder_path
+    path = message.get('content', '').strip()
+    print(f"[model] Loading: {path}")
+    if not path or not os.path.isfile(path):
+        return {"type": "error", "content": f"Model file not found: {path}"}
+    try:
+        gen_model = Model(model_path=path)
+        timbre_gen_model = None
+        feature_paths = None
+        folder_path = None
+        print("[model] Loaded. VAE and folder cache cleared.")
+        return {"type": "load_model_done", "content": "model loaded", "model_path": path}
+    except Exception as e:
+        print(f"[model] ✗ {e}")
+        return {"type": "error", "content": f"Error loading model: {e}"}
+
+
 # --- Handler for export_sound (logging only, no-op) ---
 def handle_export_sound(message):
     """Log the export-sound request and return an acknowledgement. No side-effects."""
@@ -399,6 +415,7 @@ handlers = {
     "request_load_folder": handle_request_load_folder,
     "request_retrain_vae": handle_request_retrain_vae,
     "set_regularisation": handle_set_regularisation,
+    "load_model": handle_load_model,
     "export_sound": handle_export_sound,
     "save_logs": handle_save_logs,
     "export_logs": handle_save_logs,
@@ -412,6 +429,7 @@ UDP Server Message Types:
     - request_audio: expects {"type": "request_audio", "content": <latent data dict>} to decode latent to audio.
     - request_load_folder: expects {"type": "request_load_folder", "content": <folder path>} to compute features for all audio in the folder and load them for retraining.
     - request_retrain_vae: expects {"type": "request_retrain_vae"} to retrain the VAE using the most recently loaded features.
+    - load_model: expects {"type": "load_model", "content": <path to .ts model file>} to swap the generative model. Clears VAE and folder cache.
     - export_sound: expects {"type": "export_sound", "content": <any>} to log an export-sound event (no-op, logging only).
     - save_logs / export_logs: expects {"type": "save_logs"} or {"type": "export_logs"} to open a file-save dialog and export all logged requests/responses.
 """

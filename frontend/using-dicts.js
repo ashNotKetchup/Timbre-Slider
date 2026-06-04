@@ -57,6 +57,7 @@
  * - "request_audio": Decodes latent representation to audio.
  * - "request_load_folder": Loads a folder and computes features for retraining.
  * - "request_retrain_vae": Retrains the VAE using loaded features.
+ * - "load_model": Swaps the generative model at the given filepath. Clears VAE and folder cache on the server.
  * - "export_sound": Sends an export-sound event to the server for logging only (no-op).
  * - "save_logs" / "export_logs": Opens a save-file dialog on the server to export all logged requests/responses.
  */
@@ -294,6 +295,28 @@ maxApi.addHandlers({
 		export_logs: async (...args) => {
 			// Alias for save_logs
 			return maxApi.handlers.save_logs(...args);
+		},
+		load_model: async (filepath) => {
+			if (!filepath.endsWith(".ts")) {
+				console.error("Model file must be a .ts file:", filepath);
+				await maxApi.outlet("Model load failed: file must be .ts");
+				return;
+			}
+			const message = { "type": "load_model", "content": filepath };
+			try {
+				const reply = await sendToServer(message);
+				await outletReplyDict(reply);
+				if (reply["type"] === "load_model_done") {
+					console.log("Model loaded:", reply["content"]);
+					await maxApi.outlet("Model loaded");
+				} else {
+					console.error("Failed to load model:", reply);
+					await maxApi.outlet("Model load failed");
+				}
+			} catch (err) {
+				console.error("Error loading model:", err);
+				await maxApi.outlet("Error loading model");
+			}
 		},
 		export_sound: async (...args) => {
 			// Send an export_sound event to the server (logging only, no-op)

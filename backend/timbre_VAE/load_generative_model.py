@@ -6,7 +6,6 @@ import json
 
 from .global_scaler import GlobalScaler, TimeCompressor
 
-
 # # Lazy load dotenv to support PyInstaller bundles without it
 # try:
 #     from dotenv import load_dotenv
@@ -40,15 +39,15 @@ from .global_scaler import GlobalScaler, TimeCompressor
 # import cached_conv as cc
 
 
-
 # -------------------------------
 # AI model class
 # -------------------------------
 
+
 class Model:
     """
     Manage internal state of AI model, load by name, expose encode/decode methods if they exist. Raise errors if they dont. Also give info about the nature of the encoding (eg dimensions, mode, etc)
-    
+
     TODO: make everything operate at higher precision. Currently super noisy and that is probably because of low resoulution latents
 
     internal variables:
@@ -62,7 +61,14 @@ class Model:
     - decode: takes latent embeddings as a numpy array, returns audio as numpy array
     - get_info: gives information about the shape of the model
     """
-    def __init__(self, model_path, control_vae_path=None, control_vae_input_dim=None, control_vae_latent_dim=None) -> None:
+
+    def __init__(
+        self,
+        model_path,
+        control_vae_path=None,
+        control_vae_input_dim=None,
+        control_vae_latent_dim=None,
+    ) -> None:
 
         # TODO: change this to load a list, so that eg I can stack stable audio model on another encoder etc...
         # self.model_type = model_type
@@ -100,10 +106,8 @@ class Model:
         #     print(f"[model] Control VAE loaded (in={control_vae_input_dim}, z={control_vae_latent_dim})")
         # else:            print("[model] No control VAE configured.")
         #     self.control_model = ControlModel(control_vae_path, input_dim=loaded_model.encode(torch.randn(1,1,44100)).shape[-1], latent_dim=16) #TODO: get these dimensions dynamically from the model instead of hardcoding
-        
 
         self.dimension_count = None
-     
 
     def __load_model(self, model_location: str):
         """
@@ -115,17 +119,18 @@ class Model:
         Returns:
         PyTorch model with encode and decode
         """
-        loaded_model = torch.jit.load(model_location) # Load Model
+        loaded_model = torch.jit.load(model_location)  # Load Model
         # loaded_model.double() # change weights type
         if loaded_model.encode == None:
-            return 'Model Needs Encode'
+            return "Model Needs Encode"
         if loaded_model.decode == None:
-            return 'Model Needs Decode'
-    
-        
+            return "Model Needs Decode"
+
         return loaded_model
 
-    def encode(self, audio_array:np.ndarray, use_text:bool = False, mono:bool = False) -> Tuple[np.ndarray, str]:
+    def encode(
+        self, audio_array: np.ndarray, use_text: bool = False, mono: bool = False
+    ) -> Tuple[np.ndarray, str]:
         """
         Encode an audio file into its latent representation
 
@@ -140,38 +145,60 @@ class Model:
         # check type, convert np to torch, so we can take both....
         # print(type(audio_array))
         # print('ENCODING')
-        audio_torch: torch.Tensor = torch.from_numpy(audio_array).reshape(1,1,-1)
+        audio_torch: torch.Tensor = torch.from_numpy(audio_array).reshape(1, 1, -1)
         # print(f'Running encoder, devic/e: {self.device}, audio on device: {audio_torch.device}')
         # Convert mono to stereo if needed (eg, for stable audio)
         if mono == False and audio_torch.shape[1] == 1:
             audio_torch = audio_torch.repeat(1, 2, 1)
         elif mono == True and audio_torch.shape[1] == 2:
-            audio_torch = audio_torch.mean(dim=1, keepdim=True)  # convert to mono for rave
-  
+            audio_torch = audio_torch.mean(
+                dim=1, keepdim=True
+            )  # convert to mono for rave
+
         # Ensure all models are on the correct device
         self.models = [model.to(self.device) for model in self.models]
 
         with torch.no_grad():
             # Use reduce to recursively apply the encode() method of each object
-            encoding_torch:torch.Tensor = reduce(lambda acc, each_encoder: each_encoder.encode(acc), self.models, audio_torch) #does g.encode(f.encode(x)) for a list of models [f,g] and input audio_torch
-    
-        latent_vector:np.ndarray = encoding_torch.numpy(force=True)
-            # encoding_torch:torch.Tensor = reduce(lambda acc, each_encoder: each_encoder.encode(acc), self.models, audio_torch)
+            encoding_torch: torch.Tensor = reduce(
+                lambda acc, each_encoder: each_encoder.encode(acc),
+                self.models,
+                audio_torch,
+            )  # does g.encode(f.encode(x)) for a list of models [f,g] and input audio_torch
+
+        latent_vector: np.ndarray = encoding_torch.numpy(force=True)
+        # encoding_torch:torch.Tensor = reduce(lambda acc, each_encoder: each_encoder.encode(acc), self.models, audio_torch)
         # latent_vector:np.ndarray = encoding_torch.cpu().numpy()
-        latent_text:str = 'I havent implemented text embeddings yet!'
+        latent_text: str = "I havent implemented text embeddings yet!"
         # log(f"Generated latent array of shape {latent_vector.shape}, max {latent_embedding.max()}, min {latent_embedding.min()}")
         print(f"[model] Encoded: {latent_vector.shape}")
         if self.control_model is not None:
             # Optionally encode with VAE (control model)
-            latent_vector_flat = latent_vector.squeeze(0).T if latent_vector.ndim == 3 else latent_vector
+            latent_vector_flat = (
+                latent_vector.squeeze(0).T if latent_vector.ndim == 3 else latent_vector
+            )
             with torch.no_grad():
-                vae_z = self.control_model.encode_mu(torch.from_numpy(latent_vector_flat))
-            latent_vector = vae_z.T[np.newaxis, ...]  # reshape back to (1, latent_dim) for consistency
-            latent_vector = latent_vector.cpu().numpy() if hasattr(latent_vector, "cpu") else np.array(latent_vector)
+                vae_z = self.control_model.encode_mu(
+                    torch.from_numpy(latent_vector_flat)
+                )
+            latent_vector = vae_z.T[
+                np.newaxis, ...
+            ]  # reshape back to (1, latent_dim) for consistency
+            latent_vector = (
+                latent_vector.cpu().numpy()
+                if hasattr(latent_vector, "cpu")
+                else np.array(latent_vector)
+            )
             print(f"[model] Control-encoded: {latent_vector.shape}")
         return latent_vector, latent_text
 
-    def decode(self, latent_vector:np.ndarray, latent_text:str='', use_text:bool=False, smoothness:float=2.0) -> np.ndarray:
+    def decode(
+        self,
+        latent_vector: np.ndarray,
+        latent_text: str = "",
+        use_text: bool = False,
+        smoothness: float = 2.0,
+    ) -> np.ndarray:
         """
         Decode a latent representation into audio
 
@@ -187,41 +214,53 @@ class Model:
             # Use no_grad here since we don't need gradients for inference
             with torch.no_grad():
                 decoded_latent = self.control_model.decode(latent_vector_tensor)
-            lv_np = decoded_latent.cpu().numpy() if hasattr(decoded_latent, "cpu") else np.array(decoded_latent)
+            lv_np = (
+                decoded_latent.cpu().numpy()
+                if hasattr(decoded_latent, "cpu")
+                else np.array(decoded_latent)
+            )
             # Smooth the output latent sequences to remove jaggedness/rolling sounds
             # from scipy.ndimage import gaussian_filter1d
             # Apply low-pass filter over the time dimension (axis=0)
             # lv_np = gaussian_filter1d(lv_np, sigma=smoothness, axis=0)
             latent_vector = lv_np
-        
-        
-        
+
         # Try both transpositions for latent_vector to torch.Tensor
         try:
             latent_torch = torch.Tensor(latent_vector.T)
             if latent_torch.ndim == 2:
                 latent_torch = latent_torch.unsqueeze(0)
             with torch.no_grad():
-                decoded_audio_torch = reduce(lambda z, each_decoder: each_decoder.decode(z), reversed(self.models), latent_torch)
+                decoded_audio_torch = reduce(
+                    lambda z, each_decoder: each_decoder.decode(z),
+                    reversed(self.models),
+                    latent_torch,
+                )
         except Exception as e1:
             try:
                 latent_torch = torch.Tensor(latent_vector)
                 if latent_torch.ndim == 2:
                     latent_torch = latent_torch.unsqueeze(0)
                 with torch.no_grad():
-                    decoded_audio_torch = reduce(lambda z, each_decoder: each_decoder.decode(z), reversed(self.models), latent_torch)
+                    decoded_audio_torch = reduce(
+                        lambda z, each_decoder: each_decoder.decode(z),
+                        reversed(self.models),
+                        latent_torch,
+                    )
             except Exception as e2:
-                raise RuntimeError("Both latent transpositions failed for decoding.") from e2
+                raise RuntimeError(
+                    "Both latent transpositions failed for decoding."
+                ) from e2
 
-        decoded_audio = decoded_audio_torch.numpy(force=True) # size (1,2,length), which we don't want
+        decoded_audio = decoded_audio_torch.numpy(
+            force=True
+        )  # size (1,2,length), which we don't want
 
-        #average the two channels
-        decoded_audio_mono = np.average(decoded_audio,(0,1))
+        # average the two channels
+        decoded_audio_mono = np.average(decoded_audio, (0, 1))
 
         return decoded_audio_mono
 
-
-        
     #     # dummy code to simulate decoding
     #     t = np.linspace(0, 1, 44100, endpoint=False, dtype=np.float32)
     #     audio_array = 0.5 * np.sin(t * 2 * math.pi * 440)  # 440 Hz sine wave
@@ -235,17 +274,15 @@ class Model:
     #      """Generate random audio to get the shape of its latent representation
     #      """
     #      return [0,4]
-    
-    # #TODO: put this back in. chop audio in half. figure out double/float issue. 
+
+    # #TODO: put this back in. chop audio in half. figure out double/float issue.
     #     #  duration_in_samps = 2*44100  # Duration in samples 2 seconds * sample rate
 
     #     #  generated_audio = np.random.uniform(low=-1.0, high=1.0, size=int(duration_in_samps)) # Generate noise between -1.0 and 1.0
-         
+
     #     #  latent_rep = self.encode_audio(generated_audio) # Encode audio into latent representation
 
     #     #  return latent_rep.size()
-            
-    
 
     # def decode_audio(self, latent_representation: torch.Tensor) -> np.ndarray:
     #     """
@@ -265,8 +302,8 @@ class Model:
     #     decoded_audio= decoded_audio.reshape(-1) # reshape to match audio output shape
     #     decoded_audio = decoded_audio[:len(decoded_audio) // 2] # half the length, covering a bug somewhere i think
     #     return decoded_audio
-        
-    
+
+
 class LatentRepresentation:
     """
     Manages the internal state and conversion of latent representations, including JSON serialization/deserialization,
@@ -280,6 +317,7 @@ class LatentRepresentation:
     - from_json(str or dict): Deserialize a JSON string or dict into a latent representation
     - sanitize_fragments(parts): Clean up fragmented input from Max for proper JSON parsing.
     """
+
     def __init__(self, buffer_manager=None, model_manager=None, logger=None):
         self.buffer_manager = buffer_manager
         self.model_manager = model_manager
@@ -311,23 +349,26 @@ class LatentRepresentation:
 
     def fit(self, output_range: float = 2):
         """
-        fits a scaler to the currently held latent representation. 
+        fits a scaler to the currently held latent representation.
         This scaler is applied to json input and output only.
-        """ 
-       
+        """
+
         ## fit scaler
         self._scaler.fit(self._latent_vector)
         self.json_value_range = output_range
 
         ## Time compression
         # self._time_compressor.fit(self._latent_vector)
-        
 
-    
     # -------------------------------
     # JSON serialization
     # -------------------------------
-    def to_json(self, use_string:bool = False, re_scale:bool=True, dimension_labels:list = None) -> dict:
+    def to_json(
+        self,
+        use_string: bool = False,
+        re_scale: bool = True,
+        dimension_labels: list = None,
+    ) -> dict:
         """
         Convert latent array (length x channel_count) into JSON string containing:
         - latent_vector: could be scaled values or stringified floats.
@@ -337,20 +378,21 @@ class LatentRepresentation:
         # self._scaler.fit(self._latent_representation)
         # scaled_data = self._scaler.scale(self._latent_representation) # scale latent representation to managaleable range
 
-
         if re_scale:
-            latent_vector_scaled = self._scaler.scale(self._latent_vector,output_range=self.json_value_range)
-            latent_vector_scaled = self._time_compressor.down_scale(latent_vector_scaled)
+            latent_vector_scaled = self._scaler.scale(
+                self._latent_vector, output_range=self.json_value_range
+            )
+            latent_vector_scaled = self._time_compressor.down_scale(
+                latent_vector_scaled
+            )
         else:
-            latent_vector_scaled =self._latent_vector
-
+            latent_vector_scaled = self._latent_vector
 
         # TODO: implement string conversion
         if use_string:
             latent_vector = latent_vector_scaled
         else:
             latent_vector = latent_vector_scaled
-        
 
         # Handle 3D latent arrays (batch, channels, length). 2nd dim -> index labels, values come from 3rd dim in order.
         # if latent_vector is None:
@@ -359,24 +401,29 @@ class LatentRepresentation:
         # elif getattr(latent_vector, "ndim", None) == 3:
         batches, channels, length = latent_vector.shape
 
-        def get_label(label_list:list[str], channel:int) -> str:
+        def get_label(label_list: list[str], channel: int) -> str:
             "Returns label if it exists and is not empty"
-            if isinstance(label_list, (list, tuple)) and channel < len(label_list) and label_list[channel]:
+            if (
+                isinstance(label_list, (list, tuple))
+                and channel < len(label_list)
+                and label_list[channel]
+            ):
                 return label_list[channel]
             else:
                 label = f"Dimension {channel+1}"
                 return label
 
         # formatted_vector = {channel: {'label': label, 'data'}}
-        formatted_vector = {channel: {'label': get_label(dimension_labels,channel), 
-                                      'data': latent_vector[:, channel, :].reshape(-1).tolist()} for channel in range(channels)}
-
+        formatted_vector = {
+            channel: {
+                "label": get_label(dimension_labels, channel),
+                "data": latent_vector[:, channel, :].reshape(-1).tolist(),
+            }
+            for channel in range(channels)
+        }
 
         latent_json = {"vector": formatted_vector, "text": self._latent_text}
 
-
-        
-            
         # if use_string:
         #     def str_float(x): return format(float(x), ".17g")
         #     latent_json = {
@@ -386,15 +433,14 @@ class LatentRepresentation:
         #         }
         #     }
 
-        
-            # Refactor above so that it assigns only to the latent representation part of key, regardless of other bits?
+        # Refactor above so that it assigns only to the latent representation part of key, regardless of other bits?
         # return json.dumps(latent_json)
         return latent_json
 
-    def from_json(self, json_in: dict, use_string:bool = False, re_scale:bool=True):
+    def from_json(self, json_in: dict, use_string: bool = False, re_scale: bool = True):
         """Deserialize JSON string into latent dictionary and set it.
         Convert a latent JSON string or dict back into a NumPy array (length x channel_count), text, and any labels given.
-    
+
         """
 
         if isinstance(json_in, dict):
@@ -402,21 +448,25 @@ class LatentRepresentation:
         else:
             loaded_json = json.loads(json_in)
 
-        loaded_text  = loaded_json['text']
+        loaded_text = loaded_json["text"]
         # print('text: ', loaded_text)
-  
-        items = sorted(loaded_json['vector'].items(), key=lambda kv: int(kv[0]))
-  
-        loaded_labels = [value['label'] for key, value in items]
+
+        items = sorted(loaded_json["vector"].items(), key=lambda kv: int(kv[0]))
+
+        loaded_labels = [value["label"] for key, value in items]
         # print('labels: ', loaded_labels)
 
-        loaded_data = np.array([value['data'] for key, value in items]).astype(np.float32)[np.newaxis, ...]
-        
+        loaded_data = np.array([value["data"] for key, value in items]).astype(
+            np.float32
+        )[np.newaxis, ...]
+
         # print('data: ', loaded_data.shape)
-        
+
         if re_scale:
             loaded_data = self._scaler.descale(
-                self._time_compressor.up_scale(loaded_data), output_range=self.json_value_range)
+                self._time_compressor.up_scale(loaded_data),
+                output_range=self.json_value_range,
+            )
 
         # Store parsed values
         self._latent_vector = loaded_data
@@ -427,9 +477,6 @@ class LatentRepresentation:
 
         # ignore/comment below
 
-
-
-        
         # # If input is not stringified floats, sanitize fragments (for Max)
         # if not use_string:
         #     json_in = self.sanitize_fragments(json_in)
@@ -473,15 +520,16 @@ class LatentRepresentation:
 
     # -------------------------------
     # Public getters/setters
-    # -------------------------------   
-    
-    def set_latent_representation(self, latent_vector:np.ndarray, latent_text:str='not set yet') -> bool:
+    # -------------------------------
+
+    def set_latent_representation(
+        self, latent_vector: np.ndarray, latent_text: str = "not set yet"
+    ) -> bool:
         """Set latent representation from a NumPy array."""
         self._latent_vector = latent_vector
         self._latent_text = latent_text
         return True
-    
-    def get_latent_representation(self) -> tuple[np.ndarray,str]:
+
+    def get_latent_representation(self) -> tuple[np.ndarray, str]:
         """Get the current latent representation as a NumPy array."""
         return self._latent_vector, self._latent_text
-
