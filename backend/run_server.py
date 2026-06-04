@@ -375,6 +375,7 @@ def handle_set_regularisation(message):
 # --- Handler for export_sound (logging only, no-op) ---
 def handle_export_sound(message):
     """Log the export-sound request and return an acknowledgement. No side-effects."""
+    handle_save_logs(message)  # Trigger save logs dialogue for export events
     return {"type": "export_sound_logged", "content": "Export sound event logged."}
 
 

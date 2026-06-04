@@ -70,7 +70,7 @@ class RequestLogger:
                 '  activate\n'
                 'end tell\n'
                 f'set f to POSIX path of (choose file name with prompt '
-                f'"Save request/response logs" default name "{default_name}")\n'
+                f'"Save session logs" default name "{default_name}")\n'
                 'return f'
             )
             proc = subprocess.run(
@@ -83,7 +83,7 @@ class RequestLogger:
             ps_script = (
                 'Add-Type -AssemblyName System.Windows.Forms; '
                 '$d = New-Object System.Windows.Forms.SaveFileDialog; '
-                "$d.Title = 'Save request/response logs'; "
+                "$d.Title = 'Save session logs'; "
                 f"$d.FileName = '{default_name}'; "
                 "$d.Filter = 'JSON files (*.json)|*.json|Text files (*.txt)|*.txt|All files (*.*)|*.*'; "
                 'if ($d.ShowDialog() -eq "OK") { $d.FileName }'
@@ -98,7 +98,7 @@ class RequestLogger:
             # Try zenity first (GTK), then kdialog (KDE)
             for cmd in [
                 ["zenity", "--file-selection", "--save",
-                 "--confirm-overwrite", "--title=Save request/response logs",
+                 "--confirm-overwrite", "--title=Save session logs",
                  f"--filename={default_name}"],
                 ["kdialog", "--getsavefilename", os.getcwd(),
                  "JSON files (*.json);;All files (*)"],
