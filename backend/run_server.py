@@ -480,6 +480,29 @@ def kill_existing_port_process(port):
     os.system(f"lsof -ti :{port} 2>/dev/null | xargs kill -9 2>/dev/null; sleep 0.2")
 
 
+def launch_frontend():
+    """Open the frontend that ships next to the executable.
+
+    Standalone build copies frontend.app to the dist root; the Max build copies
+    frontend/frontend.maxpat. Open whichever exists (standalone preferred).
+    """
+    import subprocess
+
+    candidates = [
+        os.path.join(BASE_DIR, 'frontend.app'),
+        os.path.join(BASE_DIR, 'frontend', 'frontend.maxpat'),
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            print(f"── Launching frontend: {path}")
+            try:
+                subprocess.Popen(["open", path])
+            except Exception as e:
+                print(f"✗ Could not launch frontend ({path}): {e}")
+            return
+    print("ℹ No frontend found next to the executable; start it manually.")
+
+
 def start_server():
     """Initialize and start the UDP communication server."""
     global gen_model
@@ -503,6 +526,7 @@ def start_server():
     server = HTTPServer(("127.0.0.1", port_number), SimpleHandler)
     server.allow_reuse_address = True  # Allow reusing port immediately
     print(f"\n🎛  MALT server listening on http://127.0.0.1:{port_number}\n")
+    launch_frontend()
     try:
         server.serve_forever()
     except KeyboardInterrupt:

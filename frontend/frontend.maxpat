@@ -167,7 +167,7 @@
 					"fontname" : "Arial",
 					"fontsize" : 13.0,
 					"id" : "obj-271",
-					"items" : [ "to Max 1", ",", "to Max 2" ],
+					"items" : [ "from frontend 1", ",", "from frontend 2", ",", "to Max 1", ",", "to Max 2", ",", "from frontend 1 #2", ",", "from frontend 2 #2" ],
 					"labelclick" : 1,
 					"maxclass" : "umenu",
 					"numinlets" : 1,
@@ -1587,15 +1587,14 @@
 					"fontname" : "Helvetica Neue",
 					"fontsize" : 15.0,
 					"id" : "obj-73",
-					"linecount" : 6,
+					"linecount" : 3,
 					"maxclass" : "comment",
 					"numinlets" : 1,
 					"numoutlets" : 0,
-					"patching_rect" : [ 1100.178894996643066, 579.042455434799194, 88.0, 111.0 ],
+					"patching_rect" : [ 1100.178894996643066, 579.042455434799194, 88.0, 59.0 ],
 					"presentation" : 1,
-					"presentation_linecount" : 4,
-					"presentation_rect" : [ 989.0, 155.0, 148.0, 76.0 ],
-					"text" : "No model trained yet. Passing input audio through to output.",
+					"presentation_rect" : [ 989.0, 155.0, 418.0, 24.0 ],
+					"text" : "Awaiting messages...",
 					"textcolor" : [ 0.925490196078431, 0.972549019607843, 0.972549019607843, 1.0 ]
 				}
 
@@ -4962,6 +4961,7 @@
 				"box" : 				{
 					"bgcolor" : [ 0.988235294117647, 0.584313725490196, 0.388235294117647, 1.0 ],
 					"buffername" : "mybuffer",
+					"chanoffset" : 0,
 					"id" : "obj-118",
 					"maxclass" : "waveform~",
 					"numinlets" : 5,
@@ -5232,8 +5232,6 @@
 					"saved_object_attributes" : 					{
 						"autostart" : 0,
 						"defer" : 0,
-						"node_bin_path" : "",
-						"npm_bin_path" : "",
 						"watch" : 0
 					}
 ,
@@ -7475,13 +7473,6 @@
 				"name" : "resize_n4m_monitor_patcher.js",
 				"bootpath" : "C74:/packages/Node for Max/patchers/debug-monitor",
 				"type" : "TEXT",
-				"implicit" : 1
-			}
-, 			{
-				"name" : "tmp016w2yfa_spectrogram.png",
-				"bootpath" : "/private/var/folders/zh/d4x4t9sd1dq3dt8gx2qs3mx80000gn/T",
-				"patcherrelativepath" : "../../../../../../private/var/folders/zh/d4x4t9sd1dq3dt8gx2qs3mx80000gn/T",
-				"type" : "PNG",
 				"implicit" : 1
 			}
 , 			{
