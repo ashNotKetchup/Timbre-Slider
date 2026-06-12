@@ -1,2 +1,2 @@
 open thispatcher
-folder "Macintosh HD:/Users/ash/Documents/GitHub/Timbre-Slider/frontend"
+folder "Macintosh HD:/Users/ash/Documents/GitHub/Timbre-Slider/frontend"include "Macintosh HD:/Users/ash/Documents/GitHub/Timbre-Slider/frontend/using-dicts.js"

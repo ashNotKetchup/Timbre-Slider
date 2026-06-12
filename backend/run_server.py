@@ -67,10 +67,13 @@ print(f'torch version: {torch.__version__}')
 import sys
 
 if getattr(sys, 'frozen', False):
-    # --onefile: data extracted to a temp _MEIPASS dir; --onedir: data sits next to the exe
-    DATA_DIR = os.path.join(getattr(sys, '_MEIPASS', os.path.dirname(sys.executable)), 'data')
+    # The build (see Makefile `compile`) copies data/ and the frontend next to
+    # the executable, not into the PyInstaller _MEIPASS bundle.
+    BASE_DIR = os.path.dirname(sys.executable)
 else:
-    DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
+    BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+
+DATA_DIR = os.path.join(BASE_DIR, 'data')
 
 print(DATA_DIR)  # useful for debugging
 
