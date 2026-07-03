@@ -67,8 +67,7 @@ print(f'torch version: {torch.__version__}')
 import sys
 
 if getattr(sys, 'frozen', False):
-    # The build (see Makefile `compile`) copies data/ and the frontend next to
-    # the executable, not into the PyInstaller _MEIPASS bundle.
+
     BASE_DIR = os.path.dirname(sys.executable)
 else:
     BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
