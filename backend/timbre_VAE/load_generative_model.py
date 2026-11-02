@@ -104,6 +104,11 @@ class Model:
         # (mean, std) of the latents the control VAE was trained on, each (1, latent channels).
         # Set together with control_model; encode/decode convert to and from those units.
         self.control_stats = None
+        # Decode edits as a change to the original latent (see decode). delta_smoothing is a
+        # Gaussian sigma in latent frames (1.5 is about 70 ms for Stable Audio); 0 turns it off.
+        self.delta_decoding = True
+        self.delta_smoothing = 1.5
+        self._delta_ref = None   # (original latent frames, their VAE encoding) for the last encoded clip
         # if control_vae_path and control_vae_input_dim and control_vae_latent_dim:
         #     self.control_model = ControlModel(control_vae_path, input_dim=control_vae_input_dim, latent_dim=control_vae_latent_dim)
         #     print(f"[model] Control VAE loaded (in={control_vae_input_dim}, z={control_vae_latent_dim})")
@@ -189,6 +194,8 @@ class Model:
                 vae_z = self.control_model.encode_mu(
                     torch.from_numpy(np.ascontiguousarray(latent_vector_flat, dtype=np.float32))
                 )
+            # Keep this clip's latent and its encoding for delta decoding
+            self._delta_ref = (raw_frames, vae_z.cpu().numpy().copy())
             latent_vector = vae_z.T[
                 np.newaxis, ...
             ]  # reshape back to (1, latent_dim) for consistency
@@ -220,9 +227,21 @@ class Model:
         if self.control_model is not None:
             z = np.ascontiguousarray(latent_vector.squeeze(0).T, dtype=np.float32)   # (frames, latent_dim)
             mean, std = self.control_stats if self.control_stats is not None else (0.0, 1.0)
+            ref = self._delta_ref
             with torch.no_grad():
-                # The VAE works in standardised units: convert its output back
-                lv_np = self.control_model.decode(torch.from_numpy(z)).cpu().numpy() * std + mean
+                if self.delta_decoding and ref is not None and ref[1].shape == z.shape:
+                    # Decode only the change the controls make and add it to the original latent.
+                    # Most of the VAE's per-frame reconstruction error cancels, neutral controls give
+                    # the plain generative reconstruction, and smoothing touches only the change.
+                    original, z0 = ref
+                    delta = (self.control_model.decode(torch.from_numpy(z))
+                             - self.control_model.decode(torch.from_numpy(z0))).cpu().numpy() * std
+                    if self.delta_smoothing:
+                        from scipy.ndimage import gaussian_filter1d
+                        delta = gaussian_filter1d(delta, sigma=self.delta_smoothing, axis=0)
+                    lv_np = original + delta
+                else:
+                    lv_np = self.control_model.decode(torch.from_numpy(z)).cpu().numpy() * std + mean
             latent_vector = lv_np
 
         # A single (1, channels, frames) latent, as encode() returns it, is already in the

@@ -140,7 +140,7 @@
       <div class="card-head"><h2>Sample</h2><span class="msg" id="sampleName"></span></div>
       <div class="players">
         <div class="player"><div class="t">Original <span>input file</span></div><audio id="aOriginal" controls preload="auto"></audio><img id="sOriginal" alt="Spectrogram of the original sample"></div>
-        <div class="player"><div class="t">VAE recon <span>unedited latent</span></div><audio id="aVae" controls preload="auto"></audio><img id="sVae" alt="Spectrogram of the unedited reconstruction"></div>
+        <div class="player"><div class="t">VAE recon <span>full VAE decode, unedited</span></div><audio id="aVae" controls preload="auto"></audio><img id="sVae" alt="Spectrogram of the unedited reconstruction"></div>
         <div class="player"><div class="t">Edited <span id="editName">draw below to make one</span></div><audio id="aEdit" controls preload="auto"></audio><img id="sEdit" alt="Spectrogram of the edited decode"></div>
       </div>
     </section>
@@ -218,7 +218,7 @@ function renderStatus(s) {
     ['folder', i.folder], ['files', i.n_files], ['features', i.feature_type],
     ['VAE', i.vae_class && i.vae_class.split('.').pop()], ['params', i.n_params && i.n_params.toLocaleString()],
     ['in → z', i.input_dim && `${i.input_dim} → ${i.latent_dim}`], ['frames', i.frames && i.frames.toLocaleString()],
-    ['generative model', i.generative_model],
+    ['generative model', i.generative_model], ['edits decode as', i.decode],
   ].filter(([, v]) => v != null && v !== '');
   $('#info').innerHTML = items.map(([k, v]) => `<span>${k} <b>${escapeHtml(v)}</b></span>`).join('');
   $('#warn').hidden = !i.warning; $('#warn').textContent = i.warning ? 'Warning: ' + i.warning : '';

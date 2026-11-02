@@ -56,6 +56,7 @@ DEFAULTS = {
     'vae': {'class': 'backend.timbre_VAE.vae_train.VAE', 'kwargs': {}},
     'train': {'num_epochs': 4000, 'batch_size': 1024, 'learning_rate': 0.01,
               'alpha_max': 10.0, 'beta_max': 0.1, 'theta_max': 10.0},
+    'decode': {'delta': True, 'smoothing': 1.5},
     'server': {'port': 8765, 'open_browser': True},
 }
 
@@ -257,6 +258,11 @@ class Testbed:
             model_path = resolve_path(self.cfg['generative_model'])
             self.state.set('loading generative model', model_path.name)
             send({'type': 'load_model', 'content': str(model_path)})
+            dec = self.cfg['decode'] or {}
+            rs.gen_model.delta_decoding = bool(dec.get('delta', True))
+            rs.gen_model.delta_smoothing = float(dec.get('smoothing') or 0)
+            self.state.info['decode'] = (f"delta, smoothing {rs.gen_model.delta_smoothing:g}"
+                                         if rs.gen_model.delta_decoding else 'full VAE decode')
 
             send({'type': 'set_regularisation', 'content': self.cfg['feature_type']})
 
@@ -275,7 +281,14 @@ class Testbed:
             self._publish_sample()
 
             self.state.set('decoding unedited sample')
-            url, spec = self.decode(self.latent_json, 'vae_recon')
+            # Always the full VAE decode here, so this player shows the VAE's own reconstruction
+            # (with delta decoding on, an unedited decode is just the generative reconstruction).
+            delta = rs.gen_model.delta_decoding
+            rs.gen_model.delta_decoding = False
+            try:
+                url, spec = self.decode(self.latent_json, 'vae_recon')
+            finally:
+                rs.gen_model.delta_decoding = delta
             self.state.sample['audio']['vae_recon'] = url
             self.state.sample['spectrogram']['vae_recon'] = spec
             self.state.set('ready', 'draw on a trajectory to edit it')

@@ -26,6 +26,13 @@ train:
   beta_max: 0.1        # KL weight (linear warm-up over the first third)
   theta_max: 10.0      # attribute weight (off for the first quarter, then ramps)
 
+# How edits are decoded (Model.delta_decoding / delta_smoothing). With delta on, an edit is decoded as a
+# change added to the original latent, so untouched trajectories give the plain generative reconstruction.
+# The "VAE recon" player always uses the full VAE decode, so you can still judge the VAE itself.
+decode:
+  delta: true
+  smoothing: 1.5      # Gaussian sigma in latent frames (~70 ms with Stable Audio); 0 = off
+
 server:
   port: 8765
   open_browser: true
