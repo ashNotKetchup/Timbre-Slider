@@ -1,3 +1,5 @@
+import copy
+import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -6,6 +8,7 @@ from itertools import product
 from scipy.interpolate import interp1d
 # from tqdm import tqdm
 from .progress import increment_progress_bar, clear_lines
+from ..settings import setting
 def resample_array(array, target_len, kind='cubic', smooth=False):
     """Interpolate array to target_len. Avoids ringing artifacts from FFT resampling."""
     if array.shape[0] == target_len:
@@ -215,7 +218,67 @@ def vae_loss(recon_x, x, mu, logvar, x_attr, vae, alpha=10.0, beta=0.1, theta=10
     loss = alpha*recon_loss + beta*kl + theta*attr_loss
     return loss, (recon_loss, kl, attr_loss)
 
-def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=256, learning_rate=1e-2, plot_loss=False, alpha_max=10.0, beta_max=0.1, theta_max=10.0):
+def _available_devices():
+    devices = ['cpu']
+    if torch.backends.mps.is_available():
+        devices.append('mps')
+    if torch.cuda.is_available():
+        devices.append('cuda')
+    return devices
+
+
+def _fastest_training_device(vae, latent_data, metadata_data, batch_size, steps=8):
+    """Time a few training steps of a copy of vae on each available device; return the fastest."""
+    devices = _available_devices()
+    if len(devices) == 1:
+        return devices[0]
+    n = min(batch_size, latent_data.size(0))
+    timings = {}
+    for device in devices:
+        try:
+            model = copy.deepcopy(vae).to(device)
+            opt = optim.Adam(model.parameters(), lr=1e-3)
+            x, a = latent_data[:n].to(device), metadata_data[:n].to(device)
+
+            def step():
+                opt.zero_grad()
+                recon, mu, logvar = model(x)
+                kl = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+                loss = nn.functional.mse_loss(recon, x) + kl + attribute_distance_loss_dimwise_vectorised(mu, a)
+                loss.backward()
+                opt.step()
+                return loss
+
+            for _ in range(2):              # warm-up
+                step()
+            step().item()                   # wait for the device
+            t = time.time()
+            for _ in range(steps):
+                loss = step()
+            loss.item()
+            timings[device] = (time.time() - t) / steps
+        except Exception as e:
+            print(f"[train] can't train on {device}: {str(e).splitlines()[0][:120]}")
+    best = min(timings, key=timings.get)
+    print("[train] auto device: " + ", ".join(f"{d} {1000 * t:.1f} ms/batch" for d, t in timings.items())
+          + f" -> {best}")
+    return best
+
+
+def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=256, learning_rate=1e-2, plot_loss=False, alpha_max=10.0, beta_max=0.1, theta_max=10.0, device=None):
+    # device: where to train (auto | cpu | mps | cuda). None uses devices.training in
+    # backend/settings.yaml. auto times a few batches on each available device and uses the
+    # fastest. The trained VAE is moved back to the CPU, where Model runs it.
+    metadata_data = torch.tensor(
+        np.concatenate(metadata_vectors, axis=0), dtype=torch.float32
+    )
+    device = device or setting('devices', 'training')
+    if str(device).strip().lower() == 'auto':
+        device = _fastest_training_device(vae, latent_data, metadata_data, batch_size)
+    device = torch.device(device)
+    vae.to(device)
+    latent_data = latent_data.to(device)
+    metadata_data = metadata_data.to(device)
     optimizer = optim.Adam(vae.parameters(), lr=learning_rate)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
     loss_history = []
@@ -223,10 +286,7 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
     epochs = num_epochs
     batch_size = batch_size
 
-    # Pre-concatenate metadata once (was previously inside the batch loop)
-    metadata_data = torch.tensor(
-        np.concatenate(metadata_vectors, axis=0), dtype=torch.float32
-    )
+    t_start = time.time()
 
     total_loss_history = []
     recon_loss_history = []
@@ -240,7 +300,7 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
         
     for epoch in range(epochs): #tqdm(range(epochs), desc="Training VAE", unit="epoch", ncols=80):
         increment_progress_bar(epoch + 1, epochs, description="Training VAE")
-        perm = torch.randperm(latent_data.size(0))
+        perm = torch.randperm(latent_data.size(0)).to(device)
         total_loss = 0
         recon_epoch = 0
         kl_epoch = 0
@@ -289,18 +349,19 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
             loss, (recon_loss, kl, attr_loss) = vae_loss(recon, batch, mu, logvar, x_attr, vae, alpha, beta, theta)
             loss.backward()
             optimizer.step()
-            total_loss += loss.item()
-            recon_epoch += recon_loss.item()
-            kl_epoch += kl.item()
-            attr_epoch += attr_loss.item()
+            # Summed on the device and read once per epoch, so a GPU isn't stopped after every batch
+            total_loss += loss.detach()
+            recon_epoch += recon_loss.detach()
+            kl_epoch += kl.detach()
+            attr_epoch += attr_loss.detach()
             n_batches += 1
             
         scheduler.step()
         # Record the mean over the epoch's batches, so the numbers don't grow with the size of the folder
-        total_loss_history.append(total_loss / n_batches)
-        recon_loss_history.append(recon_epoch / n_batches)
-        kl_loss_history.append(kl_epoch / n_batches)
-        attr_loss_history.append(attr_epoch / n_batches)
+        total_loss_history.append(float(total_loss) / n_batches)
+        recon_loss_history.append(float(recon_epoch) / n_batches)
+        kl_loss_history.append(float(kl_epoch) / n_batches)
+        attr_loss_history.append(float(attr_epoch) / n_batches)
 
         if plot_loss and (epoch % 5 == 0 or epoch == epochs - 1):
             ax.clear()
@@ -322,6 +383,11 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
         plt.ioff()
         # Optional: let the user see the final plot before it gets destroyed, or just keep it closed:
         plt.show() 
+
+    seconds = time.time() - t_start
+    print(f"[train] {epochs} epochs in {seconds:.1f} s ({1000 * seconds / max(1, epochs):.0f} ms/epoch) on {device}")
+    vae.to("cpu")
+    vae.trained_on = str(device)
 
     loss_lists = [total_loss_history, recon_loss_history, kl_loss_history, attr_loss_history]
     labels = ['Total Loss', 'Recon Loss', 'KL Loss', 'Attr Loss']

@@ -218,7 +218,8 @@ function renderStatus(s) {
     ['folder', i.folder], ['files', i.n_files], ['features', i.feature_type],
     ['VAE', i.vae_class && i.vae_class.split('.').pop()], ['params', i.n_params && i.n_params.toLocaleString()],
     ['in → z', i.input_dim && `${i.input_dim} → ${i.latent_dim}`], ['frames', i.frames && i.frames.toLocaleString()],
-    ['generative model', i.generative_model], ['edits decode as', i.decode],
+    ['generative model', i.generative_model], ['on', i.device],
+    ['VAE trained on', i.train_device], ['edits decode as', i.decode],
   ].filter(([, v]) => v != null && v !== '');
   $('#info').innerHTML = items.map(([k, v]) => `<span>${k} <b>${escapeHtml(v)}</b></span>`).join('');
   $('#warn').hidden = !i.warning; $('#warn').textContent = i.warning ? 'Warning: ' + i.warning : '';

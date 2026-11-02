@@ -1,3 +1,5 @@
+import os
+import time
 import torch
 import numpy as np
 from typing import Optional, Tuple
@@ -5,6 +7,7 @@ from functools import reduce
 import json
 
 from .global_scaler import GlobalScaler, TimeCompressor
+from ..settings import setting
 
 # # Lazy load dotenv to support PyInstaller bundles without it
 # try:
@@ -73,11 +76,13 @@ class Model:
         # TODO: change this to load a list, so that eg I can stack stable audio model on another encoder etc...
         # self.model_type = model_type
         self.model_path = model_path
-        self.device = "cpu"
-        # "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
+        # Device for the generative model: devices.generative_model in backend/settings.yaml. auto
+        # means the Apple GPU (MPS) when available, else CUDA, else the CPU. The control VAE always
+        # runs on the CPU.
+        self.device = self._pick_device()
         print(f"[model] Loading {self.model_path} …")
         print(f"[model] Device: {self.device}, torch {torch.__version__}")
-        self.models = [self.__load_model(self.model_path)]
+        self.models = [self.__load_model(self.model_path).to(self.device)]
         # Audio channels the encoder takes, if the model declares them (RAVE and the Stable Audio
         # export carry encode_params = [in_channels, in_ratio, out_channels, out_ratio]).
         self.input_channels = self._input_channels(self.models[0])
@@ -109,8 +114,9 @@ class Model:
         self.control_stats = None
         # Decode edits as a change to the original latent (see decode). delta_smoothing is a
         # Gaussian sigma in latent frames (1.5 is about 70 ms for Stable Audio); 0 turns it off.
-        self.delta_decoding = True
-        self.delta_smoothing = 1.5
+        # Both come from `decoding` in backend/settings.yaml.
+        self.delta_decoding = bool(setting("decoding", "delta"))
+        self.delta_smoothing = float(setting("decoding", "smoothing") or 0)
         self._delta_ref = None   # (original latent frames, their VAE encoding) for the last encoded clip
         # if control_vae_path and control_vae_input_dim and control_vae_latent_dim:
         #     self.control_model = ControlModel(control_vae_path, input_dim=control_vae_input_dim, latent_dim=control_vae_latent_dim)
@@ -119,6 +125,37 @@ class Model:
         #     self.control_model = ControlModel(control_vae_path, input_dim=loaded_model.encode(torch.randn(1,1,44100)).shape[-1], latent_dim=16) #TODO: get these dimensions dynamically from the model instead of hardcoding
 
         self.dimension_count = None
+
+    @staticmethod
+    def _pick_device() -> str:
+        requested = str(setting("devices", "generative_model")).strip().lower()
+        if requested not in ("", "auto"):
+            return requested
+        if torch.backends.mps.is_available():
+            return "mps"
+        if torch.cuda.is_available():
+            return "cuda"
+        return "cpu"
+
+    def _on_device(self, fn, x):
+        """fn(x) on self.device. If that fails on a GPU but works on the CPU, stay on the CPU."""
+        try:
+            return fn(x.to(self.device))
+        except Exception as gpu_error:
+            if self.device == "cpu":
+                raise
+            gpu = self.device
+            self.models = [model.to("cpu") for model in self.models]
+            try:
+                result = fn(x.to("cpu"))
+            except Exception:
+                # Fails on the CPU too, so it isn't a device problem: put the model back
+                self.models = [model.to(gpu) for model in self.models]
+                raise gpu_error
+            self.device = "cpu"
+            print(f"[model] failed on {gpu} ({str(gpu_error).splitlines()[0][:120]}); "
+                  f"using the CPU from now on")
+            return result
 
     @staticmethod
     def _input_channels(model) -> Optional[int]:
@@ -138,7 +175,9 @@ class Model:
         Returns:
         PyTorch model with encode and decode
         """
-        loaded_model = torch.jit.load(model_location)  # Load Model
+        # Load onto the CPU first: the export was saved from an MPS device, which other machines
+        # (and the CPU setting) don't have. __init__ then moves it to self.device.
+        loaded_model = torch.jit.load(model_location, map_location="cpu")
         # loaded_model.double() # change weights type
         if loaded_model.encode == None:
             return "Model Needs Encode"
@@ -177,15 +216,13 @@ class Model:
             audio_torch = audio_torch.repeat(1, 2, 1)  # e.g. for Stable Audio
         elif channels == 1 and audio_torch.shape[1] == 2:
             audio_torch = audio_torch.mean(dim=1, keepdim=True)
+        audio_torch = audio_torch.to(dtype=torch.float32)  # MPS has no float64
 
-        # Ensure all models are on the correct device
-        self.models = [model.to(self.device) for model in self.models]
-
+        t_start = time.time()
         with torch.no_grad():
-            # Use reduce to recursively apply the encode() method of each object
-            encoding_torch: torch.Tensor = reduce(
-                lambda acc, each_encoder: each_encoder.encode(acc),
-                self.models,
+            # Use reduce to recursively apply the encode() method of each object, on self.device
+            encoding_torch: torch.Tensor = self._on_device(
+                lambda x: reduce(lambda acc, each_encoder: each_encoder.encode(acc), self.models, x),
                 audio_torch,
             )  # does g.encode(f.encode(x)) for a list of models [f,g] and input audio_torch
 
@@ -194,7 +231,7 @@ class Model:
         # latent_vector:np.ndarray = encoding_torch.cpu().numpy()
         latent_text: str = "I havent implemented text embeddings yet!"
         # log(f"Generated latent array of shape {latent_vector.shape}, max {latent_embedding.max()}, min {latent_embedding.min()}")
-        print(f"[model] Encoded: {latent_vector.shape}")
+        print(f"[model] Encoded: {latent_vector.shape} in {time.time() - t_start:.2f} s on {self.device}")
         if self.control_model is not None:
             # Optionally encode with VAE (control model)
             latent_vector_flat = (
@@ -268,15 +305,15 @@ class Model:
         else:
             # Otherwise try both transpositions, as before
             layouts = [latent_vector.T, latent_vector]
+        t_start = time.time()
         for attempt, layout in enumerate(layouts):
             try:
                 latent_torch = torch.Tensor(layout)
                 if latent_torch.ndim == 2:
                     latent_torch = latent_torch.unsqueeze(0)
                 with torch.no_grad():
-                    decoded_audio_torch = reduce(
-                        lambda z, each_decoder: each_decoder.decode(z),
-                        reversed(self.models),
+                    decoded_audio_torch = self._on_device(
+                        lambda x: reduce(lambda z, each_decoder: each_decoder.decode(z), reversed(self.models), x),
                         latent_torch,
                     )
                 break
@@ -292,6 +329,7 @@ class Model:
 
         # average the two channels
         decoded_audio_mono = np.average(decoded_audio, (0, 1))
+        print(f"[model] Decoded {decoded_audio_mono.shape[-1]} samples in {time.time() - t_start:.2f} s on {self.device}")
 
         return decoded_audio_mono
 

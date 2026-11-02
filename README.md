@@ -137,6 +137,10 @@ The server supports a `LOG_DEPTH` environment flag:
 
 `make launch-interface` and `make restart-server` run with `LOG_DEPTH=minimal` automatically.
 
+### Settings
+
+`backend/settings.yaml` holds the backend's training, decoding and hardware settings: epochs, loss weights, how edits are decoded, which device Stable Audio and the VAE run on, and how many processes extract features. Edit it and restart the server. The defaults pick the fastest option for the machine: the GPU for Stable Audio when there is one, a quick timing test for the VAE's training device, and one feature process per CPU core but one.
+
 ### Adding Your Own Sounds
 
 1. Place `.wav`, `.aif`, or `.mp3` files in a folder (e.g. `sounds/my_sounds/`)

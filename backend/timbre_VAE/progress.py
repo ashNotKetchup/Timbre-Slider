@@ -24,10 +24,12 @@ def increment_progress_bar(current, total, description='', bar_length=40):
 #tqdm(range(epochs), desc="Training VAE", unit="epoch", ncols=80):
 
 
-# Test
+# Test (runs only when this file is executed directly, not on import)
 
-total_epochs = 100
-for epoch in range(total_epochs):
-    increment_progress_bar(epoch + 1, total_epochs, description="Training VAE") 
-    # Simulate work being done
-    clear_lines()
+if __name__ == "__main__":
+
+    total_epochs = 100
+    for epoch in range(total_epochs):
+        increment_progress_bar(epoch + 1, total_epochs, description="Training VAE") 
+        # Simulate work being done
+        clear_lines()
