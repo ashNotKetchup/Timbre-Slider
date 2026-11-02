@@ -29,7 +29,9 @@ def resample_array(array, target_len, kind='cubic', smooth=False):
         
     return resampled
 
-def prepare_data(sound_data, metadata_keys=None, resolution_multiplier=4, return_stats=False):
+def prepare_data(sound_data, metadata_keys=None, resolution_multiplier=1, return_stats=False):
+        # resolution_multiplier=1 trains at the generative model's own frame rate, which is what
+        # Model.encode / Model.decode use at inference (it used to be 4: cubic-upsampled sequences).
         # return_stats=True also returns the latent mean / std, which inference needs to put latents
         # into the units the VAE was trained in and back out again.
         # Prepare latent encodings as training data

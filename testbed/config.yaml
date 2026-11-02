@@ -19,7 +19,7 @@ vae:
 
 # Arguments for backend train_vae(). The values below are what run_server.py uses today.
 train:
-  num_epochs: 1000
+  num_epochs: 4000
   batch_size: 1024
   learning_rate: 0.01
   alpha_max: 10.0      # reconstruction weight

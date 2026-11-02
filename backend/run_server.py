@@ -201,10 +201,10 @@ def handle_request_retrain_vae(message):
         print(f"[retrain] {len(metadata_keys)} feature dims selected")
 
         # Prepare data for the combined set
-        # Keep the latent mean/std for Model.encode/decode
+        # Native frame rate (as at inference) and keep the latent mean/std for Model.encode/decode
         (latent_data, metadata_vectors, metadata_keys_new, input_dim_new, latent_dim_new, clip_ids,
          latent_mean, latent_std) = prepare_data(sound_data, metadata_keys=metadata_keys,
-                                                 return_stats=True)
+                                                 resolution_multiplier=1, return_stats=True)
         print(f"[retrain] Data prepared: {latent_data.shape[0]} frames, in={input_dim_new}, z={latent_dim_new}")
     # else:
         #     print("No example file to add, preparing data from sound_data only.")
@@ -216,7 +216,9 @@ def handle_request_retrain_vae(message):
         # print("Initializing VAE...")
         print(f'[retrain] Initialised with input dim {input_dim_new}, {latent_dim_new}')
         vae = VAE(input_dim=input_dim_new, latent_dim=latent_dim_new)
-        vae, loss_lists, loss_labels = train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=1024, learning_rate=1e-2, plot_loss=False)
+        # 4000 epochs: training is at the native frame rate now (4x fewer frames per epoch than the old
+        # 4x-upsampled data), so this keeps the same number of updates and about the same training time.
+        vae, loss_lists, loss_labels = train_vae(vae, latent_data, metadata_vectors, num_epochs=4000, batch_size=1024, learning_rate=1e-2, plot_loss=False)
         print(f"[retrain] VAE trained — final loss: {loss_lists[0][-1]:.1f}")
         # Update global model (in-memory)
         timbre_gen_model = gen_model

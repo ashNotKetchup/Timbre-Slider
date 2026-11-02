@@ -54,7 +54,7 @@ DEFAULTS = {
     'name': 'run', 'folder': None, 'sample': None, 'feature_type': 'pca',
     'generative_model': 'data/models/StableAudio/stable-ae-float32-torch25x.ts',
     'vae': {'class': 'backend.timbre_VAE.vae_train.VAE', 'kwargs': {}},
-    'train': {'num_epochs': 1000, 'batch_size': 1024, 'learning_rate': 0.01,
+    'train': {'num_epochs': 4000, 'batch_size': 1024, 'learning_rate': 0.01,
               'alpha_max': 10.0, 'beta_max': 0.1, 'theta_max': 10.0},
     'server': {'port': 8765, 'open_browser': True},
 }
@@ -172,11 +172,11 @@ class TrainingHooks:
                                n_params=int(sum(p.numel() for p in self.vae.parameters())))
         return self.vae
 
-    # rs.train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=1024, learning_rate=1e-2, ...)
+    # rs.train_vae(vae, latent_data, metadata_vectors, num_epochs=4000, batch_size=1024, learning_rate=1e-2, ...)
     def train(self, vae, latent_data, metadata_vectors, **kw):
         overrides = {k: v for k, v in (self.cfg['train'] or {}).items() if v is not None}
         kw.update(overrides)
-        self.state.epochs = int(kw.get('num_epochs', 1000))
+        self.state.epochs = int(kw.get('num_epochs', 4000))
         self.state.info['frames'] = int(latent_data.shape[0])
         self.state.info['train_args'] = {k: v for k, v in kw.items() if k != 'plot_loss'}
         self.state.set('training', f'{latent_data.shape[0]:,} frames')
