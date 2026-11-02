@@ -225,8 +225,8 @@ class TrainingHooks:
         if not self.nb:
             return
         h = self.state.history
-        for k in LOSS_KEYS:  # sums over batches, as train_vae records them
-            h['loss'][k].append(self.sums[k])
+        for k in LOSS_KEYS:  # means over the epoch's batches, as train_vae records them
+            h['loss'][k].append(self.sums[k] / self.nb)
         for k in h['weights']:
             h['weights'][k].append(self.w.get(k, 0.0))
         h['epoch'].append(self.cur_epoch)

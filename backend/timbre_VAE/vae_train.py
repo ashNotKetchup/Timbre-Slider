@@ -245,6 +245,7 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
         recon_epoch = 0
         kl_epoch = 0
         attr_epoch = 0
+        n_batches = 0
 
 
         #no warmup
@@ -292,12 +293,14 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
             recon_epoch += recon_loss.item()
             kl_epoch += kl.item()
             attr_epoch += attr_loss.item()
+            n_batches += 1
             
         scheduler.step()
-        total_loss_history.append(total_loss)
-        recon_loss_history.append(recon_epoch)
-        kl_loss_history.append(kl_epoch)
-        attr_loss_history.append(attr_epoch)
+        # Record the mean over the epoch's batches, so the numbers don't grow with the size of the folder
+        total_loss_history.append(total_loss / n_batches)
+        recon_loss_history.append(recon_epoch / n_batches)
+        kl_loss_history.append(kl_epoch / n_batches)
+        attr_loss_history.append(attr_epoch / n_batches)
 
         if plot_loss and (epoch % 5 == 0 or epoch == epochs - 1):
             ax.clear()

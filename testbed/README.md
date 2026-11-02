@@ -39,7 +39,7 @@ No files in `backend/` or `frontend/` are changed. While `request_retrain_vae` r
 
 - `run_server.VAE` → builds the class from `vae.class` in the config
 - `run_server.train_vae` → passes the `train:` values from the config, then saves the run
-- `vae_train.vae_loss` and `vae_train.increment_progress_bar` → read each batch's losses, so the chart updates live. The numbers are the per-epoch sums that `train_vae` records.
+- `vae_train.vae_loss` and `vae_train.increment_progress_bar` → read each batch's losses, so the chart updates live. The numbers are per-epoch means over batches, as `train_vae` records them.
 
 ## Trying a new architecture
 
