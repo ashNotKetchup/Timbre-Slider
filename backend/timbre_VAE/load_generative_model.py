@@ -225,20 +225,18 @@ class Model:
             # lv_np = gaussian_filter1d(lv_np, sigma=smoothness, axis=0)
             latent_vector = lv_np
 
-        # Try both transpositions for latent_vector to torch.Tensor
-        try:
-            latent_torch = torch.Tensor(latent_vector.T)
-            if latent_torch.ndim == 2:
-                latent_torch = latent_torch.unsqueeze(0)
-            with torch.no_grad():
-                decoded_audio_torch = reduce(
-                    lambda z, each_decoder: each_decoder.decode(z),
-                    reversed(self.models),
-                    latent_torch,
-                )
-        except Exception as e1:
+        # A single (1, channels, frames) latent, as encode() returns it, is already in the
+        # decoder's layout, so use it as is. Transposed, it becomes (frames, channels, 1), which
+        # decoders without a streaming cache (e.g. Stable Audio) accept as a batch of one-frame
+        # clips: the result is ~2048 samples instead of the whole clip.
+        if latent_vector.ndim == 3 and latent_vector.shape[0] == 1:
+            layouts = [latent_vector]
+        else:
+            # Otherwise try both transpositions, as before
+            layouts = [latent_vector.T, latent_vector]
+        for attempt, layout in enumerate(layouts):
             try:
-                latent_torch = torch.Tensor(latent_vector)
+                latent_torch = torch.Tensor(layout)
                 if latent_torch.ndim == 2:
                     latent_torch = latent_torch.unsqueeze(0)
                 with torch.no_grad():
@@ -247,10 +245,12 @@ class Model:
                         reversed(self.models),
                         latent_torch,
                     )
-            except Exception as e2:
-                raise RuntimeError(
-                    "Both latent transpositions failed for decoding."
-                ) from e2
+                break
+            except Exception as e:
+                if attempt == len(layouts) - 1:
+                    raise RuntimeError(
+                        f"Decoding failed for a latent of shape {tuple(latent_vector.shape)}."
+                    ) from e
 
         decoded_audio = decoded_audio_torch.numpy(
             force=True

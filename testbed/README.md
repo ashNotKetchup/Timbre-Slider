@@ -75,8 +75,8 @@ Features are cached by the backend, as `.pkl` files in the sample folder, the sa
 
 ## Feature-cache warning
 
-After `request_load_folder` the testbed reads the backend's feature cache. If the reconstructions the attributes were computed from are under half the input length, it shows a warning.
+After `request_load_folder`, the testbed reads the backend's feature cache. It shows a warning if the reconstructions the attributes were computed from are under half the input length.
 
-This can happen because of how `batch_compute_features` decodes. It calls `Model.decode(enc)` with `enc` shaped `(1, C, T)`. `Model.decode` first tries `latent.T`, which is `(T, C, 1)`. With a convolutional decoder that call can succeed, returning a batch of T one-frame clips instead of one clip. Their average is then used as `recon_audio`, which is 2048 samples long. A stand-in conv model reproduced this.
+This used to happen with Stable Audio. `batch_compute_features` decodes `enc`, shaped (1, C, T), with `Model.decode`, which tried `enc.T` first. The transposed shape is (T, C, 1), and the Stable Audio decoder accepts it, so it decoded T one-frame clips. Their average, 2,048 samples long, then became `recon_audio`. `Model.decode` now uses a (1, C, T) latent as it is.
 
-Whether the real SAO export does the same depends on whether it accepts a batch larger than 1. The warning tells you on the first run.
+Caches made before that fix still hold the short reconstructions. Delete the `*_preprocessed_sound_data*.pkl` files in any sample folder you loaded before the fix; the warning flags any you miss.
