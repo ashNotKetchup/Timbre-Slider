@@ -267,6 +267,7 @@ class Testbed:
 
             with TrainingHooks(self):
                 send({'type': 'request_retrain_vae'})
+            self._save_stats()
 
             self.state.set('encoding sample', self.sample_path.name)
             reply = send({'type': 'request_latent', 'content': str(self.sample_path)})
@@ -393,6 +394,16 @@ class Testbed:
         with open(self.audio_dir / f'{name}.json', 'w') as f:
             json.dump(lj, f)
         return {'audio': url, 'spectrogram': spec, 'name': name}
+
+    def _save_stats(self):
+        """Add the latent mean/std the backend now keeps (Model.control_stats) to the run's vae.pt."""
+        path = self.run_dir / 'vae.pt'
+        stats = getattr(rs.gen_model, 'control_stats', None)
+        if stats is None or not path.exists():
+            return
+        ck = torch.load(path, weights_only=False)
+        ck['latent_mean'], ck['latent_std'] = stats
+        torch.save(ck, path)
 
     def save_run(self, vae, hooks):
         h = self.state.history

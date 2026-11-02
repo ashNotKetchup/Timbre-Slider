@@ -201,7 +201,10 @@ def handle_request_retrain_vae(message):
         print(f"[retrain] {len(metadata_keys)} feature dims selected")
 
         # Prepare data for the combined set
-        latent_data, metadata_vectors, metadata_keys_new, input_dim_new, latent_dim_new, clip_ids = prepare_data(sound_data, metadata_keys=metadata_keys)
+        # Keep the latent mean/std for Model.encode/decode
+        (latent_data, metadata_vectors, metadata_keys_new, input_dim_new, latent_dim_new, clip_ids,
+         latent_mean, latent_std) = prepare_data(sound_data, metadata_keys=metadata_keys,
+                                                 return_stats=True)
         print(f"[retrain] Data prepared: {latent_data.shape[0]} frames, in={input_dim_new}, z={latent_dim_new}")
     # else:
         #     print("No example file to add, preparing data from sound_data only.")
@@ -220,6 +223,7 @@ def handle_request_retrain_vae(message):
         timbre_gen_model.control_vae_input_dim=input_dim_new
         timbre_gen_model.control_vae_latent_dim=latent_dim_new
         timbre_gen_model.control_model = vae
+        timbre_gen_model.control_stats = (latent_mean, latent_std)
         print(f"[retrain] Model updated for {_last_loaded_features['folder_path']}")
         # Encode the example audio with the new VAE and include latent in reply
         latent_reply = handle_request_latent({"type": "request_latent", "content": audio_path})

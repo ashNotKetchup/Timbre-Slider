@@ -29,7 +29,9 @@ def resample_array(array, target_len, kind='cubic', smooth=False):
         
     return resampled
 
-def prepare_data(sound_data, metadata_keys=None, resolution_multiplier=4):
+def prepare_data(sound_data, metadata_keys=None, resolution_multiplier=4, return_stats=False):
+        # return_stats=True also returns the latent mean / std, which inference needs to put latents
+        # into the units the VAE was trained in and back out again.
         # Prepare latent encodings as training data
         # latent_encodings = [sound['encoding'].squeeze(0).T for sound in sound_data]  # shape: (time, dim)
         print(f"[data] Preparing {len(sound_data)} items …")
@@ -106,6 +108,9 @@ def prepare_data(sound_data, metadata_keys=None, resolution_multiplier=4):
         input_dim = latent_data.shape[1]
         latent_dim = len(metadata_keys) + 4  # Number of metadata features + extra dimensions for unstructured variance
 
+        if return_stats:
+            return (latent_data, metadata_vectors, metadata_keys, input_dim, latent_dim, clip_ids,
+                    latent_mean.astype(np.float32), latent_std.astype(np.float32))
         return latent_data, metadata_vectors, metadata_keys, input_dim, latent_dim, clip_ids
 
 class VAE(nn.Module):

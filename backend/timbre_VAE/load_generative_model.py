@@ -101,6 +101,9 @@ class Model:
         #     raise ValueError(f"Unknown model_type: {self.model_type}")
 
         self.control_model = None
+        # (mean, std) of the latents the control VAE was trained on, each (1, latent channels).
+        # Set together with control_model; encode/decode convert to and from those units.
+        self.control_stats = None
         # if control_vae_path and control_vae_input_dim and control_vae_latent_dim:
         #     self.control_model = ControlModel(control_vae_path, input_dim=control_vae_input_dim, latent_dim=control_vae_latent_dim)
         #     print(f"[model] Control VAE loaded (in={control_vae_input_dim}, z={control_vae_latent_dim})")
@@ -177,9 +180,14 @@ class Model:
             latent_vector_flat = (
                 latent_vector.squeeze(0).T if latent_vector.ndim == 3 else latent_vector
             )
+            raw_frames = np.array(latent_vector_flat, dtype=np.float32)
+            if self.control_stats is not None:
+                # The VAE was trained on standardised latents
+                mean, std = self.control_stats
+                latent_vector_flat = (raw_frames - mean) / std
             with torch.no_grad():
                 vae_z = self.control_model.encode_mu(
-                    torch.from_numpy(latent_vector_flat)
+                    torch.from_numpy(np.ascontiguousarray(latent_vector_flat, dtype=np.float32))
                 )
             latent_vector = vae_z.T[
                 np.newaxis, ...
@@ -210,19 +218,11 @@ class Model:
         """
         # Optionally decode with VAE (control model)
         if self.control_model is not None:
-            latent_vector_tensor = torch.tensor(latent_vector.squeeze(0).T)
-            # Use no_grad here since we don't need gradients for inference
+            z = np.ascontiguousarray(latent_vector.squeeze(0).T, dtype=np.float32)   # (frames, latent_dim)
+            mean, std = self.control_stats if self.control_stats is not None else (0.0, 1.0)
             with torch.no_grad():
-                decoded_latent = self.control_model.decode(latent_vector_tensor)
-            lv_np = (
-                decoded_latent.cpu().numpy()
-                if hasattr(decoded_latent, "cpu")
-                else np.array(decoded_latent)
-            )
-            # Smooth the output latent sequences to remove jaggedness/rolling sounds
-            # from scipy.ndimage import gaussian_filter1d
-            # Apply low-pass filter over the time dimension (axis=0)
-            # lv_np = gaussian_filter1d(lv_np, sigma=smoothness, axis=0)
+                # The VAE works in standardised units: convert its output back
+                lv_np = self.control_model.decode(torch.from_numpy(z)).cpu().numpy() * std + mean
             latent_vector = lv_np
 
         # A single (1, channels, frames) latent, as encode() returns it, is already in the
