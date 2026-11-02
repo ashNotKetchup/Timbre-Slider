@@ -70,6 +70,7 @@ class TimeCompressor:
         self.init_hi_res = None
         self.init_lo_res = None
         self.factor = 10  # downsampling/upsampling factor
+        self.factor_used = 1  # factor applied to the current clip (1 when it is too short to decimate)
         
 
     def set_factor(self, factor: int):
@@ -83,10 +84,24 @@ class TimeCompressor:
     #     self.init_lo_res = signal.decimate(array, self.factor, axis=2)
     #     return self
     
+    # scipy.signal.decimate's default IIR filter is applied with filtfilt, which needs more than
+    # 3 * (order + 1) = 27 samples along the time axis.
+    MIN_DECIMATE_LENGTH = 28
+    # Short clips are decimated less, so they still have at least this many points to edit.
+    MIN_POINTS = 12
+
     def down_scale(self, array: np.ndarray) -> np.ndarray:
         self.init_hi_res = array
         print("Fitting TimeCompressor with array shape:", array.shape)
-        self.init_lo_res = signal.decimate(array, self.factor, axis=2)
+        n = array.shape[2]
+        factor = min(self.factor, max(1, n // self.MIN_POINTS))
+        if factor > 1 and n >= self.MIN_DECIMATE_LENGTH:
+            self.factor_used = factor
+            self.init_lo_res = signal.decimate(array, factor, axis=2)
+        else:
+            # Too short to decimate (under ~1.3 s with Stable Audio): keep every frame
+            self.factor_used = 1
+            self.init_lo_res = np.array(array, copy=True)
         print("Downscaled shape:", self.init_lo_res.shape)
         return self.init_lo_res
 
