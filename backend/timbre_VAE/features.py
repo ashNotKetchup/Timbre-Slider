@@ -14,6 +14,10 @@ from sklearn.preprocessing import StandardScaler
 # from tqdm import tqdm
 from .progress import increment_progress_bar, clear_lines
 
+# Rate audio is loaded at for encoding and feature extraction. It matches the rest of the app
+# (utilities/load_audio.py loads and writes at 44.1 kHz) and Stable Audio's own rate.
+SAMPLE_RATE = 44100
+
 def audio_features(audio_y, sr=44100, use_mean=False, feature_type='raw_features'):
     '''Compute timbre features for each audio file and its encoding'''
 
@@ -71,7 +75,7 @@ def batch_compute_features(sound_files, root_folder='sounds', use_recon=True, mo
         if use_recon and model is None:
             raise ValueError("Model must be provided if use_recon is True.")
 
-        y, sr = li.load(path, sr=None)
+        y, sr = li.load(path, sr=SAMPLE_RATE)  # resample to the model's rate; sr=None kept e.g. 48 kHz files as they were
         print(f'[Debug: 1] Loaded {sound_file} with shape {y.shape} and sr {sr}')
         with torch.no_grad():
             enc = model.encode(y)[0]
