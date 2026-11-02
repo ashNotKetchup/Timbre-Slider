@@ -7,7 +7,7 @@ name: baseline                    # run folder: testbed/runs/<timestamp>_<name>/
 
 folder: data/Foley                # sent as request_load_folder
 sample: null                      # sent as request_latent after training. null = first file in the folder (A-Z)
-feature_type: pca                 # sent as set_regularisation: pca | raw_features | audio_commons
+feature_type: raw_features                 # sent as set_regularisation: pca | raw_features | audio_commons
 generative_model: data/models/StableAudio/stable-ae-float32-torch25x.ts   # sent as load_model
 
 # Control VAE used by request_retrain_vae. Any importable nn.Module that is built as
