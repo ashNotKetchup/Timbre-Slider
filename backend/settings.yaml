@@ -1,0 +1,23 @@
+# MALT backend settings. Edit, then restart the server (make restart-server, make testbed, ...).
+# Anything left out uses the default shown here. The testbed can override any of these per
+# experiment under `settings:` in its config.
+
+devices:
+  generative_model: auto   # auto | mps | cuda | cpu. auto: the GPU if there is one (Apple GPU on an
+                           # M-series Mac). If it fails on the GPU, it switches to the CPU and says so.
+  training: auto           # auto | mps | cuda | cpu. auto: times a few batches on each device the
+                           # machine has and trains on the fastest.
+  feature_workers: auto    # processes for feature extraction. auto: one per CPU core but one
+                           # (never more than the number of files); 1 = one file at a time.
+
+training:                  # train_vae() arguments used when the app retrains
+  num_epochs: 4000
+  batch_size: 1024
+  learning_rate: 0.01
+  alpha_max: 10.0          # reconstruction weight
+  beta_max: 0.1            # KL weight (linear warm-up over the first third)
+  theta_max: 10.0          # attribute weight (off for the first quarter, then ramps up)
+
+decoding:
+  delta: true              # decode edits as a change added to the original latent
+  smoothing: 1.5           # Gaussian sigma of that change, in latent frames (~70 ms with Stable Audio); 0 = off

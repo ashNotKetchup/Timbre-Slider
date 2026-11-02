@@ -36,3 +36,4 @@ ipython
 
 # --- Misc ---
 packaging
+pyyaml

@@ -1,10 +1,13 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import os
+import time
 import builtins
 import warnings
 import logging
 import numpy as np
+# Let operations the Apple GPU (MPS) lacks fall back to the CPU; read when torch loads.
+os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 import torch
 # import sys
 
@@ -29,6 +32,7 @@ from backend.timbre_VAE.load_generative_model import Model, LatentRepresentation
 from backend.timbre_VAE.logger import RequestLogger
 from backend.timbre_VAE.vae_train import prepare_data, VAE, train_vae
 from backend.timbre_VAE.features import batch_compute_features, get_features
+from backend.settings import setting
 
 
 print(f'torch version: {torch.__version__}')
@@ -216,9 +220,8 @@ def handle_request_retrain_vae(message):
         # print("Initializing VAE...")
         print(f'[retrain] Initialised with input dim {input_dim_new}, {latent_dim_new}')
         vae = VAE(input_dim=input_dim_new, latent_dim=latent_dim_new)
-        # 4000 epochs: training is at the native frame rate now (4x fewer frames per epoch than the old
-        # 4x-upsampled data), so this keeps the same number of updates and about the same training time.
-        vae, loss_lists, loss_labels = train_vae(vae, latent_data, metadata_vectors, num_epochs=4000, batch_size=1024, learning_rate=1e-2, plot_loss=False)
+        # Epochs, batch size, learning rate, loss weights and device: `training` / `devices` in backend/settings.yaml
+        vae, loss_lists, loss_labels = train_vae(vae, latent_data, metadata_vectors, plot_loss=False, **setting('training'))
         print(f"[retrain] VAE trained — final loss: {loss_lists[0][-1]:.1f}")
         # Update global model (in-memory)
         timbre_gen_model = gen_model
@@ -307,6 +310,7 @@ def handle_request_audio(message):
     latent_data = message['content']
     # print(latent_data.keys())
     print("[decode] Received latent data")
+    t_start = time.time()
     try:
         if timbre_gen_model is None or timbre_gen_model.control_model is None:
             passthrough_audio = audio_handler.get_input_buffer()
@@ -345,7 +349,7 @@ def handle_request_audio(message):
         
         latent_vector_scaled = latent_vector * scale + bias
         audio_out = timbre_gen_model.decode(latent_vector_scaled, latent_text)
-        print("[decode] Done")
+        print(f"[decode] Done in {time.time() - t_start:.2f} s")
         audio_path = audio_handler.set_output_buffer(audio_out, save_plot=True)
         return {"type": "decoded", "content": "Decoded successfully", "audio_path": audio_path}
         
@@ -543,4 +547,7 @@ def start_server():
 
 
 if __name__ == "__main__":
+    # Needed for the feature-extraction worker processes in the PyInstaller build
+    import multiprocessing
+    multiprocessing.freeze_support()
     start_server()

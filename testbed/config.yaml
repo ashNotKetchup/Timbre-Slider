@@ -17,21 +17,13 @@ vae:
   class: backend.timbre_VAE.vae_train.VAE
   kwargs: {}
 
-# Arguments for backend train_vae(). The values below are what run_server.py uses today.
-train:
-  num_epochs: 4000
-  batch_size: 1024
-  learning_rate: 0.01
-  alpha_max: 10.0      # reconstruction weight
-  beta_max: 0.1        # KL weight (linear warm-up over the first third)
-  theta_max: 10.0      # attribute weight (off for the first quarter, then ramps)
-
-# How edits are decoded (Model.delta_decoding / delta_smoothing). With delta on, an edit is decoded as a
-# change added to the original latent, so untouched trajectories give the plain generative reconstruction.
-# The "VAE recon" player always uses the full VAE decode, so you can still judge the VAE itself.
-decode:
-  delta: true
-  smoothing: 1.5      # Gaussian sigma in latent frames (~70 ms with Stable Audio); 0 = off
+# Training, decoding and hardware settings live in backend/settings.yaml, shared with the app.
+# To change any of them for this experiment only, override them here with the same structure, e.g.
+#   settings:
+#     training: {num_epochs: 2000, theta_max: 5.0}
+#     devices: {generative_model: cpu, training: mps}
+#     decoding: {smoothing: 0}
+settings: {}
 
 server:
   port: 8765

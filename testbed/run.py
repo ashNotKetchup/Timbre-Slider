@@ -17,6 +17,7 @@ wraps a few backend functions in memory to read the losses and to swap the VAE c
 import os
 
 os.environ.setdefault('MPLBACKEND', 'Agg')  # backend saves spectrograms off the main thread
+os.environ.setdefault('PYTORCH_ENABLE_MPS_FALLBACK', '1')  # ops the Apple GPU lacks run on the CPU
 
 import copy  # noqa: E402
 import importlib  # noqa: E402
@@ -43,6 +44,7 @@ import soundfile as sf  # noqa: E402
 import torch  # noqa: E402
 
 import backend.run_server as rs  # noqa: E402  (importing does not start its HTTP server)
+from backend.settings import override as override_settings  # noqa: E402
 from backend.timbre_VAE import features as features_mod  # noqa: E402
 from backend.timbre_VAE import vae_train  # noqa: E402
 from backend.timbre_VAE.plotting import save_spectrogram  # noqa: E402
@@ -54,9 +56,7 @@ DEFAULTS = {
     'name': 'run', 'folder': None, 'sample': None, 'feature_type': 'pca',
     'generative_model': 'data/models/StableAudio/stable-ae-float32-torch25x.ts',
     'vae': {'class': 'backend.timbre_VAE.vae_train.VAE', 'kwargs': {}},
-    'train': {'num_epochs': 4000, 'batch_size': 1024, 'learning_rate': 0.01,
-              'alpha_max': 10.0, 'beta_max': 0.1, 'theta_max': 10.0},
-    'decode': {'delta': True, 'smoothing': 1.5},
+    'settings': {},   # overrides for backend/settings.yaml, same structure
     'server': {'port': 8765, 'open_browser': True},
 }
 
@@ -173,10 +173,8 @@ class TrainingHooks:
                                n_params=int(sum(p.numel() for p in self.vae.parameters())))
         return self.vae
 
-    # rs.train_vae(vae, latent_data, metadata_vectors, num_epochs=4000, batch_size=1024, learning_rate=1e-2, ...)
+    # rs.train_vae(vae, latent_data, metadata_vectors, plot_loss=False, **setting('training'))
     def train(self, vae, latent_data, metadata_vectors, **kw):
-        overrides = {k: v for k, v in (self.cfg['train'] or {}).items() if v is not None}
-        kw.update(overrides)
         self.state.epochs = int(kw.get('num_epochs', 4000))
         self.state.info['frames'] = int(latent_data.shape[0])
         self.state.info['train_args'] = {k: v for k, v in kw.items() if k != 'plot_loss'}
@@ -187,7 +185,10 @@ class TrainingHooks:
             self._close_epoch()
             for k, values in zip(LOSS_KEYS, loss_lists):  # the backend's own per-epoch numbers
                 h['loss'][k] = list(map(float, values))
+            self.state.info['train_device'] = getattr(vae, 'trained_on', None)
         except StopTraining:
+            self.state.info['train_device'] = str(next(vae.parameters()).device)
+            vae.to('cpu')   # train_vae was interrupted before moving it back from the training device
             self._close_epoch()
             self.state.message = f'stopped at epoch {self.cur_epoch - 1}'
             loss_lists = [h['loss'][k] for k in LOSS_KEYS]
@@ -257,10 +258,9 @@ class Testbed:
 
             model_path = resolve_path(self.cfg['generative_model'])
             self.state.set('loading generative model', model_path.name)
+            override_settings(self.cfg['settings'] or {})   # this experiment's changes to backend/settings.yaml
             send({'type': 'load_model', 'content': str(model_path)})
-            dec = self.cfg['decode'] or {}
-            rs.gen_model.delta_decoding = bool(dec.get('delta', True))
-            rs.gen_model.delta_smoothing = float(dec.get('smoothing') or 0)
+            self.state.info['device'] = rs.gen_model.device
             self.state.info['decode'] = (f"delta, smoothing {rs.gen_model.delta_smoothing:g}"
                                          if rs.gen_model.delta_decoding else 'full VAE decode')
 

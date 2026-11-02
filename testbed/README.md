@@ -20,6 +20,18 @@ make testbed CONFIG=testbed/other.yaml      # use another config
 
 The page opens at http://127.0.0.1:8765. Running the command again stops the testbed that is already running and starts a new run, and an open page switches to the new run by itself. Stop with Ctrl-C.
 
+## Settings and hardware
+
+Training, decoding and hardware settings live in `backend/settings.yaml`, which the Max app uses too. To change them for one experiment, override them under `settings:` in the testbed config, with the same structure.
+
+The `devices` defaults pick whatever runs fastest:
+
+- **`generative_model: auto`** runs Stable Audio on the GPU when there is one (the Apple GPU on an M-series Mac). If something fails there, it switches to the CPU and says so in the console.
+- **`training: auto`** times a few batches on each device the machine has, and trains on the fastest.
+- **`feature_workers: auto`** extracts features with one process per CPU core but one.
+
+To compare settings, look at the console lines `[features] ... encode + reconstruct ... s`, `[train] auto device: ...`, `[train] ... ms/epoch` and `[model] Decoded ... s`, or at the ms column of the page's Backend messages.
+
 ## How it talks to the backend
 
 The testbed imports `backend/run_server.py` and passes it the same message dicts the Max patch sends. They are round-tripped through JSON, so they are exactly what its HTTP server would receive:
@@ -38,7 +50,7 @@ The trajectories you edit are the `vector` data from the `request_latent` reply.
 No files in `backend/` or `frontend/` are changed. While `request_retrain_vae` runs, the testbed swaps a few backend names in memory and restores them afterwards:
 
 - `run_server.VAE` → builds the class from `vae.class` in the config
-- `run_server.train_vae` → passes the `train:` values from the config, then saves the run
+- `run_server.train_vae` → records the run's settings and saves the run
 - `vae_train.vae_loss` and `vae_train.increment_progress_bar` → read each batch's losses, so the chart updates live. The numbers are per-epoch means over batches, as `train_vae` records them.
 
 ## Trying a new architecture

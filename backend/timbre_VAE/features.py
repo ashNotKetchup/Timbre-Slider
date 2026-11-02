@@ -3,6 +3,9 @@ import numpy as np
 import librosa as li
 from scipy.signal import resample
 import os
+import time
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import torch
 import timbral_models
 import pickle
@@ -13,6 +16,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 # from tqdm import tqdm
 from .progress import increment_progress_bar, clear_lines
+from ..settings import setting
 
 # Rate audio is loaded at for encoding and feature extraction. It matches the rest of the app
 # (utilities/load_audio.py loads and writes at 44.1 kHz) and Stable Audio's own rate.
@@ -50,6 +54,70 @@ def get_pitch(y, sr):
     pitch_values = pitches[mags.argmax(axis=0), np.arange(mags.shape[1])]
     return pitch_values.reshape(1, -1)
 
+def _compute_features(y_recon, sr, feature_types, use_mean=False):
+    """Features of one reconstruction, for each requested type. Runs in a worker process."""
+    out = {}
+    for ft in feature_types:
+        if ft == 'raw_features' or ft == 'pca' or ft == 'PCA':
+            out[ft] = {
+                'spectral_centroid': (li.feature.spectral_centroid(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_centroid(y=y_recon, sr=sr)),
+                'spectral_flatness': (li.feature.spectral_flatness(y=y_recon).mean() if use_mean else li.feature.spectral_flatness(y=y_recon)),
+                'zero_crossing_rate': (li.feature.zero_crossing_rate(y_recon).mean() if use_mean else li.feature.zero_crossing_rate(y_recon)),
+                'loudness': (li.feature.rms(y=y_recon).mean() if use_mean else li.feature.rms(y=y_recon)),
+                'pitch': get_pitch(y_recon, sr),
+                'spectral_bandwidth': (li.feature.spectral_bandwidth(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_bandwidth(y=y_recon, sr=sr)),
+                'spectral_rolloff': (li.feature.spectral_rolloff(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_rolloff(y=y_recon, sr=sr)),
+                # spectral_contrast returns one row per band (7, T); average the bands so it has one value
+                # per frame like the other features. As (7, T) it was flattened band after band, which
+                # stretched the bands across the clip's timeline in pca_attributes / prepare_data.
+                'spectral_contrast': (li.feature.spectral_contrast(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_contrast(y=y_recon, sr=sr).mean(axis=0, keepdims=True)),
+            }
+        elif ft == 'audio_commons':
+            features_all = timbral_models.timbral_extractor(y_recon, sr, verbose=False)
+            out[ft] = {k: features_all[k] for k in ['hardness', 'warmth', 'depth', 'brightness', 'roughness', 'sharpness', 'boominess'] if k in features_all}
+        else:
+            out[ft] = {}
+    return out
+
+
+def _feature_worker_init():
+    # The pool already spreads the files across cores, so each worker uses one thread.
+    torch.set_num_threads(1)
+
+
+def _feature_workers(n_files):
+    """Worker processes for feature extraction: devices.feature_workers in backend/settings.yaml.
+    auto means one per CPU core but one, and never more than there are files."""
+    requested = str(setting('devices', 'feature_workers')).strip().lower()
+    if requested not in ('', 'auto'):
+        return max(1, int(requested))
+    return max(1, min(n_files, (os.cpu_count() or 2) - 1))
+
+
+def _features_in_parallel(jobs, workers):
+    """Run _compute_features for every job across worker processes; results in job order."""
+    results = [None] * len(jobs)
+    thread_vars = ['OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS', 'VECLIB_MAXIMUM_THREADS']
+    saved = {k: os.environ.get(k) for k in thread_vars}
+    os.environ.update({k: '1' for k in thread_vars})   # inherited by the workers only
+    try:
+        ctx = multiprocessing.get_context('spawn')
+        with ProcessPoolExecutor(max_workers=workers, mp_context=ctx, initializer=_feature_worker_init) as pool:
+            futures = {pool.submit(_compute_features, *job): i for i, job in enumerate(jobs)}
+            for done, future in enumerate(as_completed(futures), 1):
+                increment_progress_bar(done, len(jobs), description="Computing features")
+                results[futures[future]] = future.result()
+                if done != len(jobs):
+                    clear_lines()
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    return results
+
+
 def batch_compute_features(sound_files, root_folder='sounds', use_recon=True, model=None, use_mean=False, feature_type='raw_features', pca_dim=4, pca=None):
     '''
     Compute audio features for a batch of sound files.
@@ -64,45 +132,52 @@ def batch_compute_features(sound_files, root_folder='sounds', use_recon=True, mo
 
     feature_types = feature_type if isinstance(feature_type, list) else [feature_type]
     audio_features_lists = {ft: [] for ft in feature_types}
-    print(f'[Debug 0] Starting batch feature computation for {len(sound_files)} files with types: {feature_types}')
     for ft in feature_types:
         if ft not in ['raw_features', 'audio_commons', 'PCA', 'pca']:
             raise ValueError(f"Unsupported feature_type: {ft}")
 
-    for sound_file in sound_files: #tqdm(sound_files, desc="Computing features", unit="file", ncols=80):
-        increment_progress_bar(sound_files.index(sound_file) + 1, len(sound_files), description="Computing features")
+    # 1. Encode and reconstruct every file with the generative model (on its device, one at a time)
+    if use_recon and model is None:
+        raise ValueError("Model must be provided if use_recon is True.")
+    t_start = time.time()
+    items = []
+    for i, sound_file in enumerate(sound_files):
+        increment_progress_bar(i + 1, len(sound_files), description="Encoding")
         path = os.path.join(root_folder, sound_file)
-        if use_recon and model is None:
-            raise ValueError("Model must be provided if use_recon is True.")
-
         y, sr = li.load(path, sr=SAMPLE_RATE)  # resample to the model's rate; sr=None kept e.g. 48 kHz files as they were
-        print(f'[Debug: 1] Loaded {sound_file} with shape {y.shape} and sr {sr}')
         with torch.no_grad():
             enc = model.encode(y)[0]
             y_recon = model.decode(enc) if use_recon else None
-        print(f'[Debug: 2] Encoded {sound_file} to shape {enc.shape}')
+        items.append((sound_file, y, sr, enc, y_recon))
+        if i != len(sound_files) - 1:
+            clear_lines()
+    t_encode = time.time() - t_start
+
+    # 2. Features of every reconstruction, spread across CPU cores (devices.feature_workers in settings.yaml)
+    t_start = time.time()
+    jobs = [(y_recon, sr, feature_types, use_mean) for (_, _, sr, _, y_recon) in items]
+    workers = _feature_workers(len(jobs))
+    features_per_file = None
+    if workers > 1:
+        try:
+            features_per_file = _features_in_parallel(jobs, workers)
+        except Exception as e:
+            print(f"[features] parallel extraction failed ({e}); computing one file at a time")
+            workers = 1
+    if features_per_file is None:
+        features_per_file = []
+        for i, job in enumerate(jobs):
+            increment_progress_bar(i + 1, len(jobs), description="Computing features")
+            features_per_file.append(_compute_features(*job))
+            if i != len(jobs) - 1:
+                clear_lines()
+    print(f"[features] {len(items)} files: encode + reconstruct {t_encode:.1f} s on "
+          f"{getattr(model, 'device', 'cpu')}, features {time.time() - t_start:.1f} s with {workers} worker(s)")
+
+    # 3. Assemble the per-file records, as before
+    for (sound_file, y, sr, enc, y_recon), features_by_type in zip(items, features_per_file):
         for ft in feature_types:
-            print(f'[Debug: 3] Computing features for {sound_file} with feature type {ft}')
-            if ft == 'raw_features' or ft == 'pca' or ft == 'PCA':
-                features = {
-                    'spectral_centroid': (li.feature.spectral_centroid(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_centroid(y=y_recon, sr=sr)),
-                    'spectral_flatness': (li.feature.spectral_flatness(y=y_recon).mean() if use_mean else li.feature.spectral_flatness(y=y_recon)),
-                    'zero_crossing_rate': (li.feature.zero_crossing_rate(y_recon).mean() if use_mean else li.feature.zero_crossing_rate(y_recon)),
-                    'loudness': (li.feature.rms(y=y_recon).mean() if use_mean else li.feature.rms(y=y_recon)),
-                    'pitch': get_pitch(y_recon, sr),
-                    'spectral_bandwidth': (li.feature.spectral_bandwidth(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_bandwidth(y=y_recon, sr=sr)),
-                    'spectral_rolloff': (li.feature.spectral_rolloff(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_rolloff(y=y_recon, sr=sr)),
-                    # spectral_contrast returns one row per band (7, T); average the bands so it has one value
-                    # per frame like the other features. As (7, T) it was flattened band after band, which
-                    # stretched the bands across the clip's timeline in pca_attributes / prepare_data.
-                    'spectral_contrast': (li.feature.spectral_contrast(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_contrast(y=y_recon, sr=sr).mean(axis=0, keepdims=True)),
-                }
-            elif ft == 'audio_commons':
-                features_all = timbral_models.timbral_extractor(y_recon, sr, verbose=False)
-                features = {k: features_all[k] for k in ['hardness', 'warmth', 'depth', 'brightness', 'roughness', 'sharpness', 'boominess'] if k in features_all}
-            else:
-                features = {}
-            
+            features = features_by_type[ft]
             try:
                 audio_features_lists[ft].append(
                     {
@@ -119,8 +194,6 @@ def batch_compute_features(sound_files, root_folder='sounds', use_recon=True, mo
                 )
             except Exception as e:
                 print(f"[features] ✗ {sound_file}: {e}")
-        if sound_file != len(sound_files) - 1:
-            clear_lines()
 
 
     key_features_dict = {}
