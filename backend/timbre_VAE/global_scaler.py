@@ -1,6 +1,7 @@
 import numpy as np
 import warnings
 import scipy.signal as signal
+from scipy.interpolate import PchipInterpolator
 
 class GlobalScaler:
     """
@@ -114,10 +115,27 @@ class TimeCompressor:
         # compare
         diff_lo_res = new_lo_res - self.init_lo_res # or could be ratio?
         # upsample
-        diff_hi_res = signal.resample(diff_lo_res, self.init_hi_res.shape[2], axis=2) # might not apply if not periodic
+        diff_hi_res = self._upsample(diff_lo_res, self.init_hi_res.shape[2])
         # add
         new_hi_res = self.init_hi_res + diff_hi_res
         return new_hi_res
+
+    def _upsample(self, lo_res: np.ndarray, n_hi: int) -> np.ndarray:
+        """Interpolate a low-res sequence (batch, channels, n_lo) back to n_hi frames.
+
+        decimate keeps every factor-th frame, so low-res point i sits at frame i * factor. Shape-
+        preserving cubic (PCHIP) interpolation joins the points without overshoot, and the last
+        value is held to the end of the clip. (FFT resampling, used before, treated the sequence
+        as periodic: drawn edits rang on both sides and wrapped round to the clip's ends.)
+        """
+        n_lo = lo_res.shape[2]
+        if n_lo == n_hi:
+            return lo_res
+        if n_lo == 1:
+            return np.repeat(lo_res, n_hi, axis=2)
+        x_lo = np.arange(n_lo) * self.factor_used
+        x_hi = np.clip(np.arange(n_hi), 0, x_lo[-1])
+        return PchipInterpolator(x_lo, lo_res, axis=2)(x_hi).astype(lo_res.dtype, copy=False)
 
     
     # def info(self) -> str:
