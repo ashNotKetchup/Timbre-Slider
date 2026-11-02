@@ -1,0 +1,31 @@
+# VAE testbed config.
+# Run from the repo root:   .venv/bin/python -m testbed.run              (uses this file)
+#                     or:   .venv/bin/python -m testbed.run testbed/my_experiment.yaml
+# Relative paths resolve from the repo root; ~ is expanded.
+
+name: baseline                    # run folder: testbed/runs/<timestamp>_<name>/
+
+folder: data/Foley                # sent as request_load_folder
+sample: null                      # sent as request_latent after training. null = first file in the folder (A-Z)
+feature_type: pca                 # sent as set_regularisation: pca | raw_features | audio_commons
+generative_model: data/models/StableAudio/stable-ae-float32-torch25x.ts   # sent as load_model
+
+# Control VAE used by request_retrain_vae. Any importable nn.Module that is built as
+# Class(input_dim=..., latent_dim=..., **kwargs) and has the same encode / encode_mu / decode /
+# reparameterize / forward methods as backend.timbre_VAE.vae_train.VAE.
+vae:
+  class: backend.timbre_VAE.vae_train.VAE
+  kwargs: {}
+
+# Arguments for backend train_vae(). The values below are what run_server.py uses today.
+train:
+  num_epochs: 1000
+  batch_size: 1024
+  learning_rate: 0.01
+  alpha_max: 10.0      # reconstruction weight
+  beta_max: 0.1        # KL weight (linear warm-up over the first third)
+  theta_max: 10.0      # attribute weight (off for the first quarter, then ramps)
+
+server:
+  port: 8765
+  open_browser: true
