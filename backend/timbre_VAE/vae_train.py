@@ -29,7 +29,11 @@ def resample_array(array, target_len, kind='cubic', smooth=False):
         
     return resampled
 
-def prepare_data(sound_data, metadata_keys=None, resolution_multiplier=4):
+def prepare_data(sound_data, metadata_keys=None, resolution_multiplier=1, return_stats=False):
+        # resolution_multiplier=1 trains at the generative model's own frame rate, which is what
+        # Model.encode / Model.decode use at inference (it used to be 4: cubic-upsampled sequences).
+        # return_stats=True also returns the latent mean / std, which inference needs to put latents
+        # into the units the VAE was trained in and back out again.
         # Prepare latent encodings as training data
         # latent_encodings = [sound['encoding'].squeeze(0).T for sound in sound_data]  # shape: (time, dim)
         print(f"[data] Preparing {len(sound_data)} items …")
@@ -106,6 +110,9 @@ def prepare_data(sound_data, metadata_keys=None, resolution_multiplier=4):
         input_dim = latent_data.shape[1]
         latent_dim = len(metadata_keys) + 4  # Number of metadata features + extra dimensions for unstructured variance
 
+        if return_stats:
+            return (latent_data, metadata_vectors, metadata_keys, input_dim, latent_dim, clip_ids,
+                    latent_mean.astype(np.float32), latent_std.astype(np.float32))
         return latent_data, metadata_vectors, metadata_keys, input_dim, latent_dim, clip_ids
 
 class VAE(nn.Module):
@@ -176,7 +183,7 @@ def attribute_distance_loss_dimwise_vectorised(mu, x_attr, delta=1.0, eps=1e-8):
         mu: Latent samples, shape (B, D_mu)
         x_attr: Attribute outputs, shape (B, D_attr)
         delta: Tanh spread hyperparameter
-        eps: Sign stabilisation constant
+        eps: Attribute differences at or below this count as ties and are left out
 
     Returns:
         Scalar loss (only over min(D_mu, D_attr) dimensions)
@@ -190,8 +197,12 @@ def attribute_distance_loss_dimwise_vectorised(mu, x_attr, delta=1.0, eps=1e-8):
     Dz = mu[:, None, :D] - mu[None, :, :D]
     Dx = x_attr[:, None, :D] - x_attr[None, :, :D]
     latent_term = torch.tanh(delta * Dz)
-    attr_term = torch.sign(Dx + eps)
-    loss = torch.abs(latent_term - attr_term).mean()
+    attr_term = torch.sign(Dx)
+    # Only pairs whose attributes differ say which way the latent should order them. A tied pair
+    # (including every frame with itself) used to count as +1 in both orders, which no latent can
+    # satisfy: it only added a constant to the loss, with no gradient.
+    ordered = (Dx.abs() > eps).to(latent_term.dtype)
+    loss = (torch.abs(latent_term - attr_term) * ordered).sum() / ordered.sum().clamp_min(1.0)
     return loss
 
 def vae_loss(recon_x, x, mu, logvar, x_attr, vae, alpha=10.0, beta=0.1, theta=100): #alpha=1.0, beta=0.1, theta=10.0
@@ -234,6 +245,7 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
         recon_epoch = 0
         kl_epoch = 0
         attr_epoch = 0
+        n_batches = 0
 
 
         #no warmup
@@ -281,12 +293,14 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
             recon_epoch += recon_loss.item()
             kl_epoch += kl.item()
             attr_epoch += attr_loss.item()
+            n_batches += 1
             
         scheduler.step()
-        total_loss_history.append(total_loss)
-        recon_loss_history.append(recon_epoch)
-        kl_loss_history.append(kl_epoch)
-        attr_loss_history.append(attr_epoch)
+        # Record the mean over the epoch's batches, so the numbers don't grow with the size of the folder
+        total_loss_history.append(total_loss / n_batches)
+        recon_loss_history.append(recon_epoch / n_batches)
+        kl_loss_history.append(kl_epoch / n_batches)
+        attr_loss_history.append(attr_epoch / n_batches)
 
         if plot_loss and (epoch % 5 == 0 or epoch == epochs - 1):
             ax.clear()

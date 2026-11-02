@@ -78,7 +78,7 @@ def plot_feature_alignment(model, sound_files, root_folder='sounds', file_index=
     import matplotlib.pyplot as plt
 
     example_file = sound_files[file_index]
-    y, sr_ = li.load(os.path.join(root_folder, example_file), sr=None)
+    y, sr_ = li.load(os.path.join(root_folder, example_file), sr=44100)  # the rate the model expects
 
     # Encode and decode
     encoding = model.encode(y)[0]  # shape: (1, latent_dim, time)

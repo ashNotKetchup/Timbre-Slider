@@ -1,6 +1,6 @@
 # Makefile for MALT workflows
 
-.PHONY: setup install init-submodule check-env download-model run-udp open-frontend launch-interface preprocess restart-server kill-server dist_max dist_standalone
+.PHONY: setup install init-submodule check-env download-model run-udp open-frontend launch-interface preprocess restart-server kill-server dist_max dist_standalone testbed
 
 LOG_DEPTH ?= normal
 KILL_SERVER_SILENT ?= 0
@@ -53,6 +53,14 @@ run-udp: check-env kill-server
 open-frontend:
 	open frontend/frontend.maxpat
 	@echo "Frontend opened in Max/MSP. Make sure to run the server separately."
+
+# VAE testbed: load the model, train on a folder and open the web UI, in one go.
+# Replaces a testbed that is already running.
+# Usage: make testbed  |  make testbed FOLDER=~/samples  |  make testbed CONFIG=testbed/other.yaml
+CONFIG ?= testbed/config.yaml
+testbed:
+	@test -x .venv/bin/python || { echo "No .venv found. Create it with: python3 -m venv .venv && make install"; exit 1; }
+	@PYTHONWARNINGS=ignore .venv/bin/python -m testbed.run "$(CONFIG)" $(if $(FOLDER),--folder "$(FOLDER)")
 
 
 APP_NAME=run_server

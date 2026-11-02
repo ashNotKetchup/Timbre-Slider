@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VAE Testbed</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb; --surface-2: #f3f2ee;
+    --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a;
+    --good: #0ca30c; --warn: #fab219; --crit: #d03b3b;
+    --accent: #2a78d6; --accent-ink: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232321;
+      --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --accent: #3987e5;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232321;
+    --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --accent: #3987e5;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink);
+         font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1280px; margin: 0 auto; padding: 20px 16px 48px; display: grid; gap: 16px; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  h1 { font-size: 18px; margin: 0; font-weight: 650; }
+  h2 { font-size: 14px; margin: 0; font-weight: 650; }
+  .run { color: var(--ink-2); font-size: 13px; }
+  .spacer { flex: 1; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+  .card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+          background: var(--surface-2); border: 1px solid var(--border); font-size: 13px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .pill[data-kind="busy"] .dot { background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+  .pill[data-kind="ready"] .dot { background: var(--good); }
+  .pill[data-kind="error"] .dot { background: var(--crit); }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .msg { color: var(--ink-2); font-size: 13px; }
+  .bar { height: 4px; background: var(--surface-2); border-radius: 2px; overflow: hidden; width: 160px; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+  button { font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 7px; cursor: pointer;
+           border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); }
+  button:hover { border-color: var(--axis); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.small { padding: 1px 8px; font-size: 12px; }
+  label.check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); cursor: pointer; }
+  .info { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; color: var(--ink-2); }
+  .info b { color: var(--ink); font-weight: 600; }
+  .banner { border-radius: 8px; padding: 8px 12px; font-size: 13px; border: 1px solid var(--border); background: var(--surface); }
+  .banner.warn { border-left: 4px solid var(--warn); }
+  .banner.err { border-left: 4px solid var(--crit); }
+  .banner pre { margin: 6px 0 0; white-space: pre-wrap; font-size: 12px; max-height: 280px; overflow: auto; }
+  .grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .lg { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 2px 8px;
+        border-radius: 6px; background: transparent; border: 1px solid var(--border); }
+  .lg[aria-pressed="false"] { opacity: .45; }
+  .lg .sw { width: 14px; height: 2px; border-radius: 1px; }
+  .lg .v { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .chart-wrap { position: relative; height: 300px; }
+  .chart-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border);
+         border-radius: 8px; padding: 6px 9px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.12);
+         display: none; white-space: nowrap; font-variant-numeric: tabular-nums; z-index: 2; }
+  .tip .row { display: flex; align-items: center; gap: 6px; }
+  .tip .sw { width: 10px; height: 2px; }
+  .weights { font-size: 12.5px; color: var(--ink-2); margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .players { display: grid; gap: 10px; }
+  .player { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+  .player .t { font-size: 12.5px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+  .player .t span { font-weight: 400; color: var(--muted); }
+  .player audio { width: 100%; height: 32px; margin-top: 4px; display: block; }
+  .player img { width: 100%; height: 64px; object-fit: fill; display: block; margin-top: 4px; }
+  .player img:not([src]) { display: none; }
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+  .rows { display: grid; gap: 8px; margin-top: 12px; }
+  .trow { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 12px; align-items: stretch; }
+  @media (max-width: 640px) { .trow { grid-template-columns: minmax(0, 1fr); } }
+  .tmeta { font-size: 12px; color: var(--ink-2); display: grid; gap: 4px; align-content: center; }
+  .tmeta .name { font-size: 13px; color: var(--ink); font-weight: 600; }
+  .tmeta .btns { display: flex; gap: 4px; }
+  .plot { position: relative; height: 92px; background: var(--surface-2); border-radius: 8px; overflow: hidden;
+          touch-action: none; cursor: crosshair; }
+  .plot canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .playhead { position: absolute; top: 0; bottom: 0; width: 1.5px; background: var(--ink); opacity: .55; display: none; pointer-events: none; }
+  .keyline { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--ink-2); }
+  .keyline i { display: inline-block; width: 16px; height: 0; vertical-align: middle; margin-right: 5px; border-top: 2px solid; }
+  .placeholder { color: var(--muted); font-size: 13px; padding: 18px 0; }
+  .kbd { font-size: 11px; padding: 0 4px; border: 1px solid var(--border); border-radius: 4px; }
+  details summary { cursor: pointer; font-weight: 650; font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 10px; }
+  th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td code { font-size: 12px; }
+  td.note { color: var(--ink-2); overflow-wrap: anywhere; }
+  .rt-error { color: var(--crit); font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>VAE testbed</h1>
+    <span class="run" id="runName"></span>
+    <span class="spacer"></span>
+    <span class="pill" id="pill" data-kind="busy"><span class="dot"></span><span id="stage">connecting…</span></span>
+    <div class="bar" id="bar" hidden><div></div></div>
+    <span class="msg" id="msg"></span>
+    <button id="stopBtn" hidden title="Finish training now and use the model as it is">Stop training</button>
+  </header>
+
+  <div class="info" id="info"></div>
+  <div class="banner warn" id="warn" hidden></div>
+  <div class="banner err" id="err" hidden><b id="errTitle"></b><pre id="errTrace"></pre></div>
+
+  <div class="grid2">
+    <section class="card">
+      <div class="card-head"><h2>Losses</h2><span class="msg">per-epoch mean over batches, as train_vae records them · log scale</span></div>
+      <div class="legend" id="legend"></div>
+      <div class="chart-wrap" id="lossWrap"><canvas id="lossCanvas" role="img" aria-label="Training losses by epoch"></canvas><div class="tip" id="tip"></div></div>
+      <div class="weights" id="weights"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Sample</h2><span class="msg" id="sampleName"></span></div>
+      <div class="players">
+        <div class="player"><div class="t">Original <span>input file</span></div><audio id="aOriginal" controls preload="auto"></audio><img id="sOriginal" alt="Spectrogram of the original sample"></div>
+        <div class="player"><div class="t">VAE recon <span>full VAE decode, unedited</span></div><audio id="aVae" controls preload="auto"></audio><img id="sVae" alt="Spectrogram of the unedited reconstruction"></div>
+        <div class="player"><div class="t">Edited <span id="editName">draw below to make one</span></div><audio id="aEdit" controls preload="auto"></audio><img id="sEdit" alt="Spectrogram of the edited decode"></div>
+      </div>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Trajectories</h2>
+      <span class="msg">The latent from request_latent, one row per dimension. Draw on a row to redraw it over time.</span>
+    </div>
+    <div class="toolbar">
+      <button class="primary" id="decodeBtn" disabled>Decode</button>
+      <label class="check"><input type="checkbox" id="autoDecode" checked> decode on release</label>
+      <label class="check"><input type="checkbox" id="autoPlay" checked> play after decode</label>
+      <button id="resetAll" disabled>Reset all</button>
+      <span class="spacer"></span>
+      <span class="keyline"><span><i style="border-color:var(--muted)"></i>encoded</span><span><i style="border-color:var(--s1)"></i>edited</span><span><span class="kbd">space</span> play / pause edited</span></span>
+    </div>
+    <div class="rows" id="rows"><div class="placeholder">Trajectories appear once the VAE has trained and the sample is encoded.</div></div>
+  </section>
+
+  <section class="card">
+    <details id="msgDetails">
+      <summary>Backend messages <span class="msg" id="msgCount"></span></summary>
+      <div style="overflow-x:auto"><table><thead><tr><th>time</th><th>request</th><th>reply</th><th>detail</th><th class="num">ms</th></tr></thead><tbody id="msgBody"></tbody></table></div>
+    </details>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const fmt = v => v == null || !isFinite(v) ? '—' : (Math.abs(v) >= 1000 ? v.toFixed(0) : Math.abs(v) >= 100 ? v.toFixed(1) : Math.abs(v) >= 1 ? v.toFixed(3) : v.toPrecision(3));
+const escapeHtml = t => String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// ---------------------------------------------------------------- polling
+const H = { epoch: [], loss: {total: [], recon: [], kl: [], attr: []}, weights: {alpha: [], beta: [], theta: []} };
+let totalEpochs = 0, lastStage = '', trajBuilt = false, pageRun = null;
+
+async function poll() {
+  let ready = false;
+  try {
+    const s = await (await fetch('/api/status')).json();
+    ready = s.ready;
+    renderStatus(s);
+    const l = await (await fetch('/api/losses?since=' + H.epoch.length)).json();
+    if (l.since === 0 && H.epoch.length && l.count !== H.epoch.length) clearHistory();
+    if (l.epoch.length) {
+      H.epoch.push(...l.epoch);
+      for (const k in H.loss) H.loss[k].push(...l.loss[k]);
+      for (const k in H.weights) H.weights[k].push(...l.weights[k]);
+      drawLoss();
+    }
+    await refreshSample(s);
+  } catch (e) { $('#stage').textContent = 'testbed server not reachable'; $('#pill').dataset.kind = 'error'; }
+  setTimeout(poll, ready ? 2000 : 500);
+}
+function clearHistory() { H.epoch.length = 0; for (const g of ['loss', 'weights']) for (const k in H[g]) H[g][k].length = 0; }
+
+function renderStatus(s) {
+  totalEpochs = s.epochs || totalEpochs;
+  $('#stage').textContent = s.stage === 'training' && s.epochs ? `training ${s.epoch}/${s.epochs}` : s.stage;
+  $('#pill').dataset.kind = s.stage === 'ready' ? 'ready' : s.stage === 'error' ? 'error' : 'busy';
+  $('#msg').textContent = s.stage === 'error' ? '' : s.message || '';
+  const training = s.stage === 'training' && s.epochs;
+  $('#bar').hidden = !training;
+  if (training) $('#bar > div').style.width = (100 * s.epoch / s.epochs) + '%';
+  $('#stopBtn').hidden = !training;
+  const i = s.info || {};
+  if (i.run_dir) {  // a new run took over this port: start fresh on it
+    if (!pageRun) pageRun = i.run_dir; else if (pageRun !== i.run_dir) { location.reload(); return; }
+  }
+  $('#runName').textContent = i.run_dir || '';
+  const items = [
+    ['folder', i.folder], ['files', i.n_files], ['features', i.feature_type],
+    ['VAE', i.vae_class && i.vae_class.split('.').pop()], ['params', i.n_params && i.n_params.toLocaleString()],
+    ['in → z', i.input_dim && `${i.input_dim} → ${i.latent_dim}`], ['frames', i.frames && i.frames.toLocaleString()],
+    ['generative model', i.generative_model], ['edits decode as', i.decode],
+  ].filter(([, v]) => v != null && v !== '');
+  $('#info').innerHTML = items.map(([k, v]) => `<span>${k} <b>${escapeHtml(v)}</b></span>`).join('');
+  $('#warn').hidden = !i.warning; $('#warn').textContent = i.warning ? 'Warning: ' + i.warning : '';
+  $('#err').hidden = s.stage !== 'error';
+  if (s.stage === 'error') { $('#errTitle').textContent = s.message; $('#errTrace').textContent = s.error || ''; }
+  renderMessages(s.messages || []);
+  lastStage = s.stage;
+}
+$('#stopBtn').onclick = () => fetch('/api/stop', {method: 'POST', body: '{}'});
+
+function renderMessages(msgs) {
+  $('#msgCount').textContent = msgs.length ? `· last: ${msgs[msgs.length - 1].type} → ${msgs[msgs.length - 1].reply}` : '';
+  $('#msgBody').innerHTML = msgs.slice().reverse().map(m => `<tr>
+    <td>${m.time}</td><td><code>${escapeHtml(m.type)}</code></td>
+    <td class="${m.reply === 'error' || m.reply === 'warning' ? 'rt-error' : ''}"><code>${escapeHtml(m.reply)}</code></td>
+    <td class="note">${escapeHtml(m.detail || '')}${m.note ? '<br>' + escapeHtml(m.note) : ''}</td><td class="num">${m.ms.toLocaleString()}</td></tr>`).join('');
+}
+
+async function refreshSample(s) {
+  if (trajBuilt) return;
+  const smp = await (await fetch('/api/sample')).json();
+  if (smp.filename) $('#sampleName').textContent = smp.filename + (smp.duration ? ` · ${smp.duration.toFixed(1)} s` : '');
+  const a = smp.audio || {}, sp = smp.spectrogram || {};
+  setSrc('#aOriginal', a.original); setSrc('#aVae', a.vae_recon);
+  setSrc('#sOriginal', sp.original); setSrc('#sVae', sp.vae_recon);
+  if (smp.data && s.ready) { buildTrajectories(smp); trajBuilt = true; }
+}
+function setSrc(sel, url) { const el = $(sel); if (url && el.dataset.src !== url) { el.src = url; el.dataset.src = url; } }
+
+// ---------------------------------------------------------------- loss chart
+const SERIES = [
+  {key: 'total', name: 'Total', color: '--ink'},
+  {key: 'recon', name: 'Recon', color: '--s1'},
+  {key: 'kl',    name: 'KL',    color: '--s2'},
+  {key: 'attr',  name: 'Attr',  color: '--s3'},
+];
+const visible = {total: true, recon: true, kl: true, attr: true};
+let hoverIdx = null, lossGeom = null;
+
+for (const s of SERIES) {
+  const b = document.createElement('button');
+  b.className = 'lg'; b.setAttribute('aria-pressed', 'true');
+  b.innerHTML = `<span class="sw" style="background:var(${s.color})"></span>${s.name} <span class="v" data-k="${s.key}"></span>`;
+  b.onclick = () => { visible[s.key] = !visible[s.key]; b.setAttribute('aria-pressed', visible[s.key]); drawLoss(); };
+  $('#legend').appendChild(b);
+}
+
+function sizeCanvas(c) {
+  const r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+  const ctx = c.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return [ctx, r.width, r.height];
+}
+function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(Math.max(raw, 1))); for (const m of [1, 2, 5, 10]) if (m * p >= raw) return m * p; return 10 * p; }
+const sup = d => String(d).split('').map(c => '⁰¹²³⁴⁵⁶⁷⁸⁹'['0123456789'.indexOf(c)] || (c === '-' ? '⁻' : c)).join('');
+
+function drawLoss() {
+  const c = $('#lossCanvas'); const [ctx, W, Hh] = sizeCanvas(c);
+  ctx.clearRect(0, 0, W, Hh);
+  const pad = {l: 46, r: 12, t: 32, b: 26};
+  const n = H.epoch.length, xmax = Math.max(totalEpochs, n ? H.epoch[n - 1] : 0, 2);
+  let lo = Infinity, hi = -Infinity;
+  for (const s of SERIES) if (visible[s.key]) for (const v of H.loss[s.key]) if (v > 0 && isFinite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+  ctx.font = '11px system-ui, sans-serif';
+  if (!isFinite(lo)) {
+    ctx.fillStyle = css('--muted'); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(lastStage === 'error' ? 'no losses' : 'losses appear when training starts', W / 2, Hh / 2);
+    lossGeom = null; for (const el of document.querySelectorAll('.lg .v')) el.textContent = ''; return;
+  }
+  let l0 = Math.floor(Math.log10(lo)), l1 = Math.ceil(Math.log10(hi)); if (l1 === l0) l1 = l0 + 1;
+  const x = e => pad.l + (e - 1) / (xmax - 1) * (W - pad.l - pad.r);
+  const y = v => pad.t + (1 - (Math.log10(Math.max(v, 10 ** l0)) - l0) / (l1 - l0)) * (Hh - pad.t - pad.b);
+  // grid + y ticks
+  ctx.lineWidth = 1; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  const sub = l1 - l0 <= 2 ? [1, 2, 5] : [1];
+  for (let d = l0; d <= l1; d++) for (const m of sub) {
+    const v = m * 10 ** d; if (v > 10 ** l1) continue;
+    const yy = Math.round(y(v)) + .5;
+    ctx.strokeStyle = css('--grid'); ctx.globalAlpha = m === 1 ? 1 : .45;
+    ctx.beginPath(); ctx.moveTo(pad.l, yy); ctx.lineTo(W - pad.r, yy); ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.fillStyle = css('--muted'); ctx.fillText(m === 1 ? `10${sup(d)}` : `${m}×10${sup(d)}`, pad.l - 6, yy);
+  }
+  // x ticks + baseline
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  const step = niceStep(xmax / 6);
+  for (let e = step; e <= xmax; e += step) { ctx.fillStyle = css('--muted'); ctx.fillText(e, x(e), Hh - pad.b + 8); }
+  ctx.strokeStyle = css('--axis'); ctx.beginPath(); ctx.moveTo(pad.l, Hh - pad.b + .5); ctx.lineTo(W - pad.r, Hh - pad.b + .5); ctx.stroke();
+  // schedule markers from the weights train_vae passed to vae_loss
+  const th = H.weights.theta, be = H.weights.beta, bmax = Math.max(0, ...be);
+  const attrOn = th.findIndex(v => v > 0), klFull = bmax > 0 ? be.findIndex(v => v >= bmax - 1e-12) : -1;
+  ctx.setLineDash([3, 3]); ctx.strokeStyle = css('--axis'); ctx.fillStyle = css('--muted'); ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  [[attrOn, 'attr on'], [klFull, 'KL full']].filter(([i]) => i > 0).sort((a, b) => a[0] - b[0]).forEach(([i, label], k) => {
+    const xx = Math.round(x(H.epoch[i])) + .5; ctx.beginPath(); ctx.moveTo(xx, 3 + 13 * k); ctx.lineTo(xx, Hh - pad.b); ctx.stroke();
+    const tw = ctx.measureText(label).width, right = xx + 4 + tw > W - pad.r;
+    ctx.textAlign = right ? 'right' : 'left'; ctx.fillText(label, right ? xx - 4 : xx + 4, 2 + 13 * k);
+  });
+  ctx.textAlign = 'left';
+  ctx.setLineDash([]);
+  // series
+  for (const s of SERIES) {
+    if (!visible[s.key]) continue;
+    const ys = H.loss[s.key]; if (!ys.length) continue;
+    ctx.strokeStyle = css(s.color); ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.beginPath();
+    ys.forEach((v, i) => { const px = x(H.epoch[i]), py = y(v > 0 ? v : 10 ** l0); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
+    ctx.stroke();
+  }
+  const idx = hoverIdx != null ? Math.min(hoverIdx, n - 1) : n - 1;
+  if (hoverIdx != null) {
+    const xx = Math.round(x(H.epoch[idx])) + .5;
+    ctx.strokeStyle = css('--axis'); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(xx, pad.t); ctx.lineTo(xx, Hh - pad.b); ctx.stroke();
+    for (const s of SERIES) if (visible[s.key]) {
+      const v = H.loss[s.key][idx]; if (!(v > 0)) continue;
+      ctx.fillStyle = css(s.color); ctx.strokeStyle = css('--surface'); ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(xx, y(v), 4, 0, 7); ctx.fill(); ctx.stroke();
+    }
+  }
+  lossGeom = {pad, W, n, xmax};
+  for (const s of SERIES) document.querySelector(`.lg .v[data-k="${s.key}"]`).textContent = fmt(H.loss[s.key][idx]);
+  $('#weights').textContent = `epoch ${H.epoch[idx]} · weights passed to vae_loss: α ${fmt(H.weights.alpha[idx])}  β ${fmt(H.weights.beta[idx])}  θ ${fmt(H.weights.theta[idx])}`;
+}
+$('#lossWrap').addEventListener('pointermove', e => {
+  if (!lossGeom || !lossGeom.n) return;
+  const r = e.currentTarget.getBoundingClientRect(), px = e.clientX - r.left;
+  const {pad, W, n, xmax} = lossGeom;
+  const ep = 1 + (px - pad.l) / (W - pad.l - pad.r) * (xmax - 1);
+  hoverIdx = Math.max(0, Math.min(n - 1, Math.round(ep) - H.epoch[0]));
+  drawLoss();
+  const tip = $('#tip');
+  tip.innerHTML = `<b>epoch ${H.epoch[hoverIdx]}</b>` + SERIES.filter(s => visible[s.key]).map(s =>
+    `<div class="row"><span class="sw" style="background:var(${s.color})"></span>${s.name} ${fmt(H.loss[s.key][hoverIdx])}</div>`).join('');
+  tip.style.display = 'block';
+  tip.style.left = (px + 14 + tip.offsetWidth > r.width ? px - 14 - tip.offsetWidth : px + 14) + 'px'; tip.style.top = '24px';
+});
+$('#lossWrap').addEventListener('pointerleave', () => { hoverIdx = null; $('#tip').style.display = 'none'; drawLoss(); });
+new ResizeObserver(() => drawLoss()).observe($('#lossWrap'));
+
+// ---------------------------------------------------------------- trajectory editor
+const TJ = { T: 0, dims: 0, base: [], draw: [], lo: -2.5, hi: 2.5, rows: [] };
+
+function buildTrajectories(smp) {
+  const rows = $('#rows'); rows.innerHTML = '';
+  TJ.dims = smp.data.length; TJ.T = smp.data[0].length; TJ.rows = [];
+  let m = 0; for (const d of smp.data) for (const v of d) m = Math.max(m, Math.abs(v));
+  TJ.hi = Math.max(2.5, m * 1.15); TJ.lo = -TJ.hi;   // request_latent scales the latent to about ±2
+  for (let d = 0; d < TJ.dims; d++) {
+    TJ.base[d] = Float32Array.from(smp.data[d]); TJ.draw[d] = Float32Array.from(smp.data[d]);
+    const row = document.createElement('div'); row.className = 'trow';
+    row.innerHTML = `
+      <div class="tmeta">
+        <div class="name">${escapeHtml(smp.labels[d])}</div>
+        <div>${d < smp.n_attr ? 'regularised' : 'unregularised'}</div>
+        <div class="btns"><button class="small" data-act="reset">reset</button><button class="small" data-act="flat">flatten</button></div>
+      </div>
+      <div class="plot"><canvas aria-label="Trajectory of ${escapeHtml(smp.labels[d])}"></canvas><div class="playhead"></div></div>`;
+    rows.appendChild(row);
+    const plot = row.querySelector('.plot');
+    TJ.rows[d] = {canvas: row.querySelector('canvas'), head: row.querySelector('.playhead')};
+    row.querySelector('[data-act=reset]').onclick = () => { TJ.draw[d] = Float32Array.from(TJ.base[d]); drawRow(d); edited(); };
+    row.querySelector('[data-act=flat]').onclick = () => { let s = 0; for (const v of TJ.draw[d]) s += v; TJ.draw[d].fill(s / TJ.T); drawRow(d); edited(); };
+    attachDrawing(d, plot);
+    new ResizeObserver(() => drawRow(d)).observe(plot);
+  }
+  $('#decodeBtn').disabled = false; $('#resetAll').disabled = false;
+}
+$('#resetAll').onclick = () => { for (let d = 0; d < TJ.dims; d++) { TJ.draw[d] = Float32Array.from(TJ.base[d]); drawRow(d); } edited(); };
+
+function drawRow(d) {
+  const {canvas} = TJ.rows[d]; const [ctx, W, Hh] = sizeCanvas(canvas);
+  const T = TJ.T, x = i => T > 1 ? 6 + i / (T - 1) * (W - 12) : W / 2, y = v => Hh - 6 - (v - TJ.lo) / (TJ.hi - TJ.lo) * (Hh - 12);
+  ctx.clearRect(0, 0, W, Hh);
+  ctx.strokeStyle = css('--grid'); ctx.lineWidth = 1; const y0 = Math.round(y(0)) + .5;
+  ctx.beginPath(); ctx.moveTo(0, y0); ctx.lineTo(W, y0); ctx.stroke();
+  const line = (arr, color, width, dots) => {
+    ctx.strokeStyle = css(color); ctx.fillStyle = css(color); ctx.lineWidth = width; ctx.lineJoin = 'round'; ctx.beginPath();
+    for (let i = 0; i < T; i++) { const py = y(arr[i]); i ? ctx.lineTo(x(i), py) : ctx.moveTo(x(i), py); }
+    ctx.stroke();
+    if (dots) for (let i = 0; i < T; i++) { ctx.beginPath(); ctx.arc(x(i), y(arr[i]), 2.5, 0, 7); ctx.fill(); }
+  };
+  line(TJ.base[d], '--muted', 1.5, false);
+  line(TJ.draw[d], '--s1', 2, T <= 120);
+}
+
+function attachDrawing(d, plot) {
+  let last = null;
+  const toPoint = e => {
+    const r = plot.getBoundingClientRect();
+    const fx = (e.clientX - r.left - 6) / (r.width - 12), fy = (r.height - 6 - (e.clientY - r.top)) / (r.height - 12);
+    return [Math.round(Math.max(0, Math.min(1, fx)) * (TJ.T - 1)), TJ.lo + Math.max(0, Math.min(1, fy)) * (TJ.hi - TJ.lo)];
+  };
+  const apply = ([i, v]) => {
+    if (last) {
+      const [i0, v0] = last, n = Math.abs(i - i0);
+      for (let k = 0; k <= n; k++) { const t = n ? k / n : 1; TJ.draw[d][Math.round(i0 + (i - i0) * t)] = v0 + (v - v0) * t; }
+    } else TJ.draw[d][i] = v;
+    last = [i, v]; drawRow(d);
+  };
+  plot.addEventListener('pointerdown', e => { plot.setPointerCapture(e.pointerId); last = null; apply(toPoint(e)); });
+  plot.addEventListener('pointermove', e => { if (last) apply(toPoint(e)); });
+  const end = () => { if (last) { last = null; edited(); } };
+  plot.addEventListener('pointerup', end); plot.addEventListener('pointercancel', end);
+}
+
+// ---------------------------------------------------------------- decoding (request_audio)
+let decoding = false, pending = false;
+function edited() { if ($('#autoDecode').checked) decode(); }
+$('#decodeBtn').onclick = () => decode();
+async function decode() {
+  if (!TJ.T) return;
+  if (decoding) { pending = true; return; }
+  decoding = true; $('#decodeBtn').disabled = true; $('#decodeBtn').textContent = 'Decoding…';
+  try {
+    const data = []; for (let d = 0; d < TJ.dims; d++) data.push(Array.from(TJ.draw[d], v => +v.toFixed(5)));
+    const res = await fetch('/api/decode', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({data})});
+    const j = await res.json();
+    if (!res.ok || j.error) throw new Error(j.error || res.statusText);
+    setSrc('#aEdit', j.audio); if (j.spectrogram) setSrc('#sEdit', j.spectrogram);
+    $('#editName').textContent = j.name;
+    if ($('#autoPlay').checked && !pending) $('#aEdit').play().catch(() => {});
+  } catch (e) { $('#editName').textContent = 'error: ' + e.message; }
+  decoding = false; $('#decodeBtn').disabled = false; $('#decodeBtn').textContent = 'Decode';
+  if (pending) { pending = false; decode(); }
+}
+
+// ---------------------------------------------------------------- playhead + keys
+const players = ['#aOriginal', '#aVae', '#aEdit'].map(s => $(s));
+players.forEach(p => p.addEventListener('play', () => players.forEach(q => { if (q !== p) q.pause(); })));
+(function tick() {
+  const p = players.find(a => !a.paused && a.duration);
+  for (const r of TJ.rows) {
+    r.head.style.display = p ? 'block' : 'none';
+    if (p) r.head.style.left = `calc(6px + (100% - 12px) * ${p.currentTime / p.duration})`;
+  }
+  requestAnimationFrame(tick);
+})();
+document.addEventListener('keydown', e => {
+  if (e.code !== 'Space' || /INPUT|BUTTON|AUDIO|SUMMARY/.test(document.activeElement.tagName)) return;
+  e.preventDefault(); const a = $('#aEdit').src ? $('#aEdit') : $('#aVae'); if (!a.src) return;
+  a.paused ? a.play() : a.pause();
+});
+
+poll();
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from typing import Tuple
+from typing import Optional, Tuple
 from functools import reduce
 import json
 
@@ -78,6 +78,9 @@ class Model:
         print(f"[model] Loading {self.model_path} …")
         print(f"[model] Device: {self.device}, torch {torch.__version__}")
         self.models = [self.__load_model(self.model_path)]
+        # Audio channels the encoder takes, if the model declares them (RAVE and the Stable Audio
+        # export carry encode_params = [in_channels, in_ratio, out_channels, out_ratio]).
+        self.input_channels = self._input_channels(self.models[0])
         # print(f"[model] Loaded model: {self.models[0]}")
         #     ## Load the autoencoder from stable-audio-open-1.0
 
@@ -101,6 +104,14 @@ class Model:
         #     raise ValueError(f"Unknown model_type: {self.model_type}")
 
         self.control_model = None
+        # (mean, std) of the latents the control VAE was trained on, each (1, latent channels).
+        # Set together with control_model; encode/decode convert to and from those units.
+        self.control_stats = None
+        # Decode edits as a change to the original latent (see decode). delta_smoothing is a
+        # Gaussian sigma in latent frames (1.5 is about 70 ms for Stable Audio); 0 turns it off.
+        self.delta_decoding = True
+        self.delta_smoothing = 1.5
+        self._delta_ref = None   # (original latent frames, their VAE encoding) for the last encoded clip
         # if control_vae_path and control_vae_input_dim and control_vae_latent_dim:
         #     self.control_model = ControlModel(control_vae_path, input_dim=control_vae_input_dim, latent_dim=control_vae_latent_dim)
         #     print(f"[model] Control VAE loaded (in={control_vae_input_dim}, z={control_vae_latent_dim})")
@@ -108,6 +119,14 @@ class Model:
         #     self.control_model = ControlModel(control_vae_path, input_dim=loaded_model.encode(torch.randn(1,1,44100)).shape[-1], latent_dim=16) #TODO: get these dimensions dynamically from the model instead of hardcoding
 
         self.dimension_count = None
+
+    @staticmethod
+    def _input_channels(model) -> Optional[int]:
+        """Input channel count from a TorchScript model's encode_params, or None if it has none."""
+        try:
+            return int(model.encode_params[0])
+        except Exception:
+            return None
 
     def __load_model(self, model_location: str):
         """
@@ -129,7 +148,7 @@ class Model:
         return loaded_model
 
     def encode(
-        self, audio_array: np.ndarray, use_text: bool = False, mono: bool = False
+        self, audio_array: np.ndarray, use_text: bool = False, mono: Optional[bool] = None
     ) -> Tuple[np.ndarray, str]:
         """
         Encode an audio file into its latent representation
@@ -137,7 +156,8 @@ class Model:
         Parameters:
         audio_array (x): numpy array of a loaded audio file
         use_text: bool declaring weather or not to recalculate text embedding
-        mono: bool declaring weather or not to convert stereo to mono
+        mono: True encodes mono, False stereo. None (default) uses the channel count the model
+            declares (1 for most RAVE models, 2 for Stable Audio), or stereo if it declares none.
 
         Returns:
         Latent representation (y) a np array of shape []
@@ -147,13 +167,16 @@ class Model:
         # print('ENCODING')
         audio_torch: torch.Tensor = torch.from_numpy(audio_array).reshape(1, 1, -1)
         # print(f'Running encoder, devic/e: {self.device}, audio on device: {audio_torch.device}')
-        # Convert mono to stereo if needed (eg, for stable audio)
-        if mono == False and audio_torch.shape[1] == 1:
-            audio_torch = audio_torch.repeat(1, 2, 1)
-        elif mono == True and audio_torch.shape[1] == 2:
-            audio_torch = audio_torch.mean(
-                dim=1, keepdim=True
-            )  # convert to mono for rave
+        # Give the encoder the number of channels it expects. Mono RAVE models used to get a
+        # stereo copy too (mono defaulted to False), which they reject.
+        if mono is None:
+            channels = self.input_channels or 2
+        else:
+            channels = 1 if mono else 2
+        if channels == 2 and audio_torch.shape[1] == 1:
+            audio_torch = audio_torch.repeat(1, 2, 1)  # e.g. for Stable Audio
+        elif channels == 1 and audio_torch.shape[1] == 2:
+            audio_torch = audio_torch.mean(dim=1, keepdim=True)
 
         # Ensure all models are on the correct device
         self.models = [model.to(self.device) for model in self.models]
@@ -177,10 +200,17 @@ class Model:
             latent_vector_flat = (
                 latent_vector.squeeze(0).T if latent_vector.ndim == 3 else latent_vector
             )
+            raw_frames = np.array(latent_vector_flat, dtype=np.float32)
+            if self.control_stats is not None:
+                # The VAE was trained on standardised latents
+                mean, std = self.control_stats
+                latent_vector_flat = (raw_frames - mean) / std
             with torch.no_grad():
                 vae_z = self.control_model.encode_mu(
-                    torch.from_numpy(latent_vector_flat)
+                    torch.from_numpy(np.ascontiguousarray(latent_vector_flat, dtype=np.float32))
                 )
+            # Keep this clip's latent and its encoding for delta decoding
+            self._delta_ref = (raw_frames, vae_z.cpu().numpy().copy())
             latent_vector = vae_z.T[
                 np.newaxis, ...
             ]  # reshape back to (1, latent_dim) for consistency
@@ -210,35 +240,37 @@ class Model:
         """
         # Optionally decode with VAE (control model)
         if self.control_model is not None:
-            latent_vector_tensor = torch.tensor(latent_vector.squeeze(0).T)
-            # Use no_grad here since we don't need gradients for inference
+            z = np.ascontiguousarray(latent_vector.squeeze(0).T, dtype=np.float32)   # (frames, latent_dim)
+            mean, std = self.control_stats if self.control_stats is not None else (0.0, 1.0)
+            ref = self._delta_ref
             with torch.no_grad():
-                decoded_latent = self.control_model.decode(latent_vector_tensor)
-            lv_np = (
-                decoded_latent.cpu().numpy()
-                if hasattr(decoded_latent, "cpu")
-                else np.array(decoded_latent)
-            )
-            # Smooth the output latent sequences to remove jaggedness/rolling sounds
-            # from scipy.ndimage import gaussian_filter1d
-            # Apply low-pass filter over the time dimension (axis=0)
-            # lv_np = gaussian_filter1d(lv_np, sigma=smoothness, axis=0)
+                if self.delta_decoding and ref is not None and ref[1].shape == z.shape:
+                    # Decode only the change the controls make and add it to the original latent.
+                    # Most of the VAE's per-frame reconstruction error cancels, neutral controls give
+                    # the plain generative reconstruction, and smoothing touches only the change.
+                    original, z0 = ref
+                    delta = (self.control_model.decode(torch.from_numpy(z))
+                             - self.control_model.decode(torch.from_numpy(z0))).cpu().numpy() * std
+                    if self.delta_smoothing:
+                        from scipy.ndimage import gaussian_filter1d
+                        delta = gaussian_filter1d(delta, sigma=self.delta_smoothing, axis=0)
+                    lv_np = original + delta
+                else:
+                    lv_np = self.control_model.decode(torch.from_numpy(z)).cpu().numpy() * std + mean
             latent_vector = lv_np
 
-        # Try both transpositions for latent_vector to torch.Tensor
-        try:
-            latent_torch = torch.Tensor(latent_vector.T)
-            if latent_torch.ndim == 2:
-                latent_torch = latent_torch.unsqueeze(0)
-            with torch.no_grad():
-                decoded_audio_torch = reduce(
-                    lambda z, each_decoder: each_decoder.decode(z),
-                    reversed(self.models),
-                    latent_torch,
-                )
-        except Exception as e1:
+        # A single (1, channels, frames) latent, as encode() returns it, is already in the
+        # decoder's layout, so use it as is. Transposed, it becomes (frames, channels, 1), which
+        # decoders without a streaming cache (e.g. Stable Audio) accept as a batch of one-frame
+        # clips: the result is ~2048 samples instead of the whole clip.
+        if latent_vector.ndim == 3 and latent_vector.shape[0] == 1:
+            layouts = [latent_vector]
+        else:
+            # Otherwise try both transpositions, as before
+            layouts = [latent_vector.T, latent_vector]
+        for attempt, layout in enumerate(layouts):
             try:
-                latent_torch = torch.Tensor(latent_vector)
+                latent_torch = torch.Tensor(layout)
                 if latent_torch.ndim == 2:
                     latent_torch = latent_torch.unsqueeze(0)
                 with torch.no_grad():
@@ -247,10 +279,12 @@ class Model:
                         reversed(self.models),
                         latent_torch,
                     )
-            except Exception as e2:
-                raise RuntimeError(
-                    "Both latent transpositions failed for decoding."
-                ) from e2
+                break
+            except Exception as e:
+                if attempt == len(layouts) - 1:
+                    raise RuntimeError(
+                        f"Decoding failed for a latent of shape {tuple(latent_vector.shape)}."
+                    ) from e
 
         decoded_audio = decoded_audio_torch.numpy(
             force=True

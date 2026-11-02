@@ -7,9 +7,16 @@ import torch
 import timbral_models
 import pickle
 import pandas as pd
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.decomposition import PCA
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 # from tqdm import tqdm
 from .progress import increment_progress_bar, clear_lines
+
+# Rate audio is loaded at for encoding and feature extraction. It matches the rest of the app
+# (utilities/load_audio.py loads and writes at 44.1 kHz) and Stable Audio's own rate.
+SAMPLE_RATE = 44100
 
 def audio_features(audio_y, sr=44100, use_mean=False, feature_type='raw_features'):
     '''Compute timbre features for each audio file and its encoding'''
@@ -68,7 +75,7 @@ def batch_compute_features(sound_files, root_folder='sounds', use_recon=True, mo
         if use_recon and model is None:
             raise ValueError("Model must be provided if use_recon is True.")
 
-        y, sr = li.load(path, sr=None)
+        y, sr = li.load(path, sr=SAMPLE_RATE)  # resample to the model's rate; sr=None kept e.g. 48 kHz files as they were
         print(f'[Debug: 1] Loaded {sound_file} with shape {y.shape} and sr {sr}')
         with torch.no_grad():
             enc = model.encode(y)[0]
@@ -85,7 +92,10 @@ def batch_compute_features(sound_files, root_folder='sounds', use_recon=True, mo
                     'pitch': get_pitch(y_recon, sr),
                     'spectral_bandwidth': (li.feature.spectral_bandwidth(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_bandwidth(y=y_recon, sr=sr)),
                     'spectral_rolloff': (li.feature.spectral_rolloff(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_rolloff(y=y_recon, sr=sr)),
-                    'spectral_contrast': (li.feature.spectral_contrast(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_contrast(y=y_recon, sr=sr)),
+                    # spectral_contrast returns one row per band (7, T); average the bands so it has one value
+                    # per frame like the other features. As (7, T) it was flattened band after band, which
+                    # stretched the bands across the clip's timeline in pca_attributes / prepare_data.
+                    'spectral_contrast': (li.feature.spectral_contrast(y=y_recon, sr=sr).mean() if use_mean else li.feature.spectral_contrast(y=y_recon, sr=sr).mean(axis=0, keepdims=True)),
                 }
             elif ft == 'audio_commons':
                 features_all = timbral_models.timbral_extractor(y_recon, sr, verbose=False)
@@ -337,14 +347,65 @@ def filter_attributes(array_of_dicts, key, n_clusters=4, random_state=0):
 
 
 
+# --- Varimax rotation for the PCA attributes ---
+def _varimax(loadings, max_iter=100, tol=1e-8):
+    """Return the orthogonal rotation (k x k) that maximises the varimax criterion of `loadings` (p x k)."""
+    p, k = loadings.shape
+    rotation = np.eye(k)
+    criterion = 0.0
+    for _ in range(max_iter):
+        rotated = loadings @ rotation
+        u, s, vt = np.linalg.svd(
+            loadings.T @ (rotated ** 3 - rotated @ np.diag((rotated ** 2).sum(axis=0)) / p))
+        rotation = u @ vt
+        new_criterion = s.sum()
+        if new_criterion < criterion * (1 + tol):
+            break
+        criterion = new_criterion
+    return rotation
+
+
+class VarimaxPCA(BaseEstimator, TransformerMixin):
+    """PCA followed by a varimax rotation of the kept components.
+
+    Spans the same subspace and keeps the same total variance as PCA, but each component loads on
+    fewer features and the variance is spread more evenly across components. Scores are whitened
+    before rotating, so the rotated components stay uncorrelated. Components are ordered by the
+    variance they carry and signed so each one's largest loading is positive.
+    """
+
+    def __init__(self, n_components=4, random_state=0):
+        self.n_components = n_components
+        self.random_state = random_state
+
+    def fit(self, X, y=None):
+        self.pca_ = PCA(n_components=self.n_components, whiten=True, random_state=self.random_state).fit(X)
+        loadings = self.pca_.components_.T * np.sqrt(self.pca_.explained_variance_)   # features x k
+        rotation = _varimax(loadings)
+        rotated = loadings @ rotation
+        order = np.argsort(-(rotated ** 2).sum(axis=0))
+        rotation, rotated = rotation[:, order], rotated[:, order]
+        sign = np.sign(rotated[np.abs(rotated).argmax(axis=0), np.arange(rotated.shape[1])])
+        self.rotation_ = rotation * sign
+        self.loadings_ = rotated * sign
+        total_variance = self.pca_.explained_variance_[0] / self.pca_.explained_variance_ratio_[0]
+        self.explained_variance_ratio_ = (self.loadings_ ** 2).sum(axis=0) / total_variance
+        return self
+
+    def transform(self, X):
+        return self.pca_.transform(X) @ self.rotation_
+
+
 # --- Feature PCA and selection ---
-def pca_attributes(array_of_dicts, key, n_dim=4, random_state=0):
+def pca_attributes(array_of_dicts, key, n_dim=4, random_state=0, rotate=True):
     """
     Given a list of dicts (dataset) and a key (e.g. 'features_recon'),
     fit PCA on the features and project each sample into n_dim principal components.
 
     Fits on all unstacked rows, then applies pca.transform() to each sample's
     original data so output shape matches input shape (scalar → scalar, array → array).
+
+    rotate=True applies a varimax rotation to the components (see VarimaxPCA).
 
     Returns (selected_feature_names, reduced_dicts, pca).
     """
@@ -381,10 +442,21 @@ def pca_attributes(array_of_dicts, key, n_dim=4, random_state=0):
     # --- 3. Fit PCA ---
     X = np.nan_to_num(df.values)
     n_components = min(n_dim, X.shape[0], X.shape[1])
-    pca = PCA(n_components=n_components, random_state=random_state)
+    # Standardise each feature before PCA. Hz-valued features (centroid, rolloff, bandwidth, pitch)
+    # have variances millions of times larger than flatness, zero-crossing rate or loudness, and
+    # would otherwise make up the whole projection. The pipeline fits and transforms like the PCA.
+    # With rotate=True the components are varimax-rotated: same subspace, more even variance,
+    # and each component tied to fewer features (see VarimaxPCA).
+    if rotate:
+        reducer = VarimaxPCA(n_components=n_components, random_state=random_state)
+    else:
+        reducer = PCA(n_components=n_components, random_state=random_state)
+    pca = make_pipeline(StandardScaler(), reducer)
     pca.fit(X)
 
-    print(f"[features] PCA {n_components}D, explained var: {pca.explained_variance_ratio_.sum():.0%}")
+    shares = ' / '.join(f'{v:.0%}' for v in pca[-1].explained_variance_ratio_)
+    print(f"[features] PCA {n_components}D on standardised features{' (varimax)' if rotate else ''}, "
+          f"explained var: {pca[-1].explained_variance_ratio_.sum():.0%} ({shares})")
     selected_features = [f"Dim {i+1}" for i in range(n_components)]
 
     # --- 4. Apply fitted PCA to each sample's original features ---
