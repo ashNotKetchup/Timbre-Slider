@@ -183,7 +183,7 @@ def attribute_distance_loss_dimwise_vectorised(mu, x_attr, delta=1.0, eps=1e-8):
         mu: Latent samples, shape (B, D_mu)
         x_attr: Attribute outputs, shape (B, D_attr)
         delta: Tanh spread hyperparameter
-        eps: Sign stabilisation constant
+        eps: Attribute differences at or below this count as ties and are left out
 
     Returns:
         Scalar loss (only over min(D_mu, D_attr) dimensions)
@@ -197,8 +197,12 @@ def attribute_distance_loss_dimwise_vectorised(mu, x_attr, delta=1.0, eps=1e-8):
     Dz = mu[:, None, :D] - mu[None, :, :D]
     Dx = x_attr[:, None, :D] - x_attr[None, :, :D]
     latent_term = torch.tanh(delta * Dz)
-    attr_term = torch.sign(Dx + eps)
-    loss = torch.abs(latent_term - attr_term).mean()
+    attr_term = torch.sign(Dx)
+    # Only pairs whose attributes differ say which way the latent should order them. A tied pair
+    # (including every frame with itself) used to count as +1 in both orders, which no latent can
+    # satisfy: it only added a constant to the loss, with no gradient.
+    ordered = (Dx.abs() > eps).to(latent_term.dtype)
+    loss = (torch.abs(latent_term - attr_term) * ordered).sum() / ordered.sum().clamp_min(1.0)
     return loss
 
 def vae_loss(recon_x, x, mu, logvar, x_attr, vae, alpha=10.0, beta=0.1, theta=100): #alpha=1.0, beta=0.1, theta=10.0
