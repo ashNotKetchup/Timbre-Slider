@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from typing import Tuple
+from typing import Optional, Tuple
 from functools import reduce
 import json
 
@@ -78,6 +78,9 @@ class Model:
         print(f"[model] Loading {self.model_path} …")
         print(f"[model] Device: {self.device}, torch {torch.__version__}")
         self.models = [self.__load_model(self.model_path)]
+        # Audio channels the encoder takes, if the model declares them (RAVE and the Stable Audio
+        # export carry encode_params = [in_channels, in_ratio, out_channels, out_ratio]).
+        self.input_channels = self._input_channels(self.models[0])
         # print(f"[model] Loaded model: {self.models[0]}")
         #     ## Load the autoencoder from stable-audio-open-1.0
 
@@ -117,6 +120,14 @@ class Model:
 
         self.dimension_count = None
 
+    @staticmethod
+    def _input_channels(model) -> Optional[int]:
+        """Input channel count from a TorchScript model's encode_params, or None if it has none."""
+        try:
+            return int(model.encode_params[0])
+        except Exception:
+            return None
+
     def __load_model(self, model_location: str):
         """
         Loads a model from a location. Model must be a '.TS' file, and must have 'encode' and 'decode' methods
@@ -137,7 +148,7 @@ class Model:
         return loaded_model
 
     def encode(
-        self, audio_array: np.ndarray, use_text: bool = False, mono: bool = False
+        self, audio_array: np.ndarray, use_text: bool = False, mono: Optional[bool] = None
     ) -> Tuple[np.ndarray, str]:
         """
         Encode an audio file into its latent representation
@@ -145,7 +156,8 @@ class Model:
         Parameters:
         audio_array (x): numpy array of a loaded audio file
         use_text: bool declaring weather or not to recalculate text embedding
-        mono: bool declaring weather or not to convert stereo to mono
+        mono: True encodes mono, False stereo. None (default) uses the channel count the model
+            declares (1 for most RAVE models, 2 for Stable Audio), or stereo if it declares none.
 
         Returns:
         Latent representation (y) a np array of shape []
@@ -155,13 +167,16 @@ class Model:
         # print('ENCODING')
         audio_torch: torch.Tensor = torch.from_numpy(audio_array).reshape(1, 1, -1)
         # print(f'Running encoder, devic/e: {self.device}, audio on device: {audio_torch.device}')
-        # Convert mono to stereo if needed (eg, for stable audio)
-        if mono == False and audio_torch.shape[1] == 1:
-            audio_torch = audio_torch.repeat(1, 2, 1)
-        elif mono == True and audio_torch.shape[1] == 2:
-            audio_torch = audio_torch.mean(
-                dim=1, keepdim=True
-            )  # convert to mono for rave
+        # Give the encoder the number of channels it expects. Mono RAVE models used to get a
+        # stereo copy too (mono defaulted to False), which they reject.
+        if mono is None:
+            channels = self.input_channels or 2
+        else:
+            channels = 1 if mono else 2
+        if channels == 2 and audio_torch.shape[1] == 1:
+            audio_torch = audio_torch.repeat(1, 2, 1)  # e.g. for Stable Audio
+        elif channels == 1 and audio_torch.shape[1] == 2:
+            audio_torch = audio_torch.mean(dim=1, keepdim=True)
 
         # Ensure all models are on the correct device
         self.models = [model.to(self.device) for model in self.models]
