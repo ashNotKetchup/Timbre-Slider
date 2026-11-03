@@ -74,12 +74,23 @@ The backend builds it as `MyVAE(input_dim=..., latent_dim=..., **kwargs)`. It mu
 
 The backend currently feeds the VAE single frames, not sequences. `train_vae` draws random frames of shape `(batch, input_dim)`, and `Model.encode`/`decode` pass one clip as `(T, dim)`. A conv or recurrent model will run on that unchanged, but it only sees time if you add sequence batching to `train_vae`.
 
+## Dataset tab
+
+Once the VAE has trained, the **Dataset** tab reports on the frames the backend trained it on (captured from `prepare_data`, with the duplicate of the sample that `run_server` appends left out):
+
+- **How much each attribute is encoded.** A ridge regression from one latent frame to each attribute, scored on clips it didn't see. It reports R², rank correlation, rank correlation within clips (what matters for editing one sound) and between clip averages. The same predictors are also scored on the latent after the VAE round trip, to show whether the VAE keeps each attribute. A third pair of columns predicts from the VAE's own code; that one is optimistic, because the VAE was trained on every clip's labels.
+- **Where each attribute varies:** the share of its variance inside clips versus between them.
+- **How the attributes move together:** correlation over all frames and over clip averages. Cells beyond the p < 0.05 level for that number of clips are outlined.
+
+The numbers are also saved to `analysis.json` in the run folder.
+
 ## Each run
 
 Each run creates `testbed/runs/<timestamp>_<name>/` containing:
 
 - `config.yaml`: a copy of the config used
 - `losses.json`: per-epoch losses and loss weights
+- `analysis.json`: the numbers behind the Dataset tab
 - `vae.pt`: the state dict, class, dimensions and history
 - `audio/`: `original.wav`, `vae_recon.wav`, and `edit_###.wav` with its edited latent JSON and the backend's spectrogram PNGs
 

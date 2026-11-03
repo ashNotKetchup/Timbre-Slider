@@ -55,6 +55,10 @@ def make_server(tb, state, port):
                                    'weights': {k: cut(v) for k, v in h['weights'].items()}})
             if p == '/api/sample':
                 return self._json(state.sample)
+            if p == '/api/dataset':
+                if state.analysis is None:
+                    return self._json({'error': state.info.get('analysis_error') or 'not ready yet'}, 409)
+                return self._json(state.analysis.dataset())
             if p.startswith('/audio/'):
                 name = Path(p).name  # no directory traversal
                 return self._file(tb.audio_dir / name)

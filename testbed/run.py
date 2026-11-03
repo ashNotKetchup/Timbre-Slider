@@ -48,6 +48,7 @@ from backend.settings import override as override_settings  # noqa: E402
 from backend.timbre_VAE import features as features_mod  # noqa: E402
 from backend.timbre_VAE import vae_train  # noqa: E402
 from backend.timbre_VAE.plotting import save_spectrogram  # noqa: E402
+from testbed.analysis import Analysis, FolderData  # noqa: E402
 
 AUDIO_EXTS = ('.wav', '.aif', '.mp3', '.ogg')  # same filter as backend/run_server.py
 LOSS_KEYS = ('total', 'recon', 'kl', 'attr')    # order of train_vae's loss_lists
@@ -102,6 +103,7 @@ class State:
         self.sample = {}
         self.messages = []   # recent request/response pairs, for the UI
         self.decode_count = 0
+        self.analysis = None  # testbed.analysis.Analysis once the VAE has trained (Dataset tab)
 
     def set(self, stage, message=''):
         self.stage, self.message = stage, message
@@ -155,15 +157,23 @@ class TrainingHooks:
         self.cur_epoch = 0
 
     def __enter__(self):
-        self.orig = (rs.train_vae, rs.VAE, vae_train.vae_loss, vae_train.increment_progress_bar)
+        self.orig = (rs.train_vae, rs.VAE, vae_train.vae_loss, vae_train.increment_progress_bar, rs.prepare_data)
         rs.train_vae = self.train
         rs.VAE = self.make_vae
         vae_train.vae_loss = self.loss
         vae_train.increment_progress_bar = self.progress
+        rs.prepare_data = self.prepare
         return self
 
     def __exit__(self, *exc):
-        rs.train_vae, rs.VAE, vae_train.vae_loss, vae_train.increment_progress_bar = self.orig
+        (rs.train_vae, rs.VAE, vae_train.vae_loss, vae_train.increment_progress_bar,
+         rs.prepare_data) = self.orig
+
+    # rs.prepare_data(sound_data, ...) builds the training set: keep it for the Dataset tab
+    def prepare(self, sound_data, *args, **kw):
+        out = self.orig[4](sound_data, *args, **kw)
+        self.tb.captured = (sound_data, out)
+        return out
 
     # rs.VAE(input_dim=..., latent_dim=...) is called inside handle_request_retrain_vae
     def make_vae(self, input_dim, latent_dim):
@@ -249,6 +259,7 @@ class Testbed:
         shutil.copy(self.config_path, self.run_dir / 'config.yaml')
         self.backend = Backend(state)
         self.latent_json = None
+        self.captured = None   # (sound_data, prepare_data output) from the retrain
         state.info.update(name=cfg['name'], run_dir=str(self.run_dir.relative_to(REPO_ROOT)))
 
     def run(self):
@@ -274,6 +285,7 @@ class Testbed:
             with TrainingHooks(self):
                 send({'type': 'request_retrain_vae'})
             self._save_stats()
+            self._analyse()
 
             self.state.set('encoding sample', self.sample_path.name)
             reply = send({'type': 'request_latent', 'content': str(self.sample_path)})
@@ -296,6 +308,25 @@ class Testbed:
             self.state.error = traceback.format_exc()
             self.state.set('error', str(e))
             print(self.state.error)
+
+    def _analyse(self):
+        """Dataset tab: computed once, from the frames the VAE was trained on."""
+        if self.captured is None or rs.gen_model.control_stats is None:
+            return
+        self.state.set('analysing', 'dataset report')
+        try:
+            t0 = time.time()
+            data = FolderData(*self.captured)
+            mean, std = rs.gen_model.control_stats
+            an = Analysis(data, rs.gen_model.control_model, mean, std, sample_name=self.sample_path.name)
+            report = {'dataset': an.dataset()}
+            with open(self.run_dir / 'analysis.json', 'w') as f:
+                json.dump(report, f)
+            self.state.analysis = an
+            print(f'[testbed] analysis done in {time.time() - t0:.1f} s')
+        except Exception as e:  # reports are optional: keep the run going
+            self.state.info['analysis_error'] = f'{type(e).__name__}: {e}'
+            traceback.print_exc()
 
     def _check_config(self):
         folder = resolve_path(self.cfg['folder'])

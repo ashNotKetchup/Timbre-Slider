@@ -110,12 +110,37 @@
   td code { font-size: 12px; }
   td.note { color: var(--ink-2); overflow-wrap: anywhere; }
   .rt-error { color: var(--crit); font-weight: 600; }
+  nav.tabs { display: flex; gap: 2px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 2px; }
+  nav.tabs button { border: 0; background: transparent; padding: 4px 12px; border-radius: 6px; color: var(--ink-2); }
+  nav.tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .tab { display: grid; gap: 16px; }
+  .tab[hidden] { display: none; }
+  .note { font-size: 12.5px; color: var(--ink-2); margin: 8px 0 0; max-width: 900px; }
+  .note b { color: var(--ink); }
+  .refs { font-size: 12.5px; color: var(--ink-2); margin: 6px 0 0; padding-left: 18px; }
+  .refs li { margin: 3px 0; }
+  .refs a { color: var(--accent); }
+  table.metric th.grp { text-align: center; color: var(--ink-2); border-bottom: 1px solid var(--axis); }
+  table.metric td.num { min-width: 64px; }
+  table.metric th.num { text-align: right; }
+  table.metric td.dim { color: var(--muted); }
+  table.metric td.sig { font-weight: 700; outline: 1.5px solid var(--ink-2); outline-offset: -2px; }
+  .matrices { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .split { display: grid; grid-template-columns: 170px minmax(0, 1fr) 90px; gap: 6px 12px; align-items: center; font-size: 12.5px; margin-top: 10px; }
+  .split .track { height: 14px; display: flex; border-radius: 4px; overflow: hidden; background: var(--surface-2); }
+  .split .track div { height: 100%; }
+  .split .v { color: var(--ink-2); font-variant-numeric: tabular-nums; text-align: right; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 5px; }
 </style>
 </head>
 <body>
 <main>
   <header>
     <h1>VAE testbed</h1>
+    <nav class="tabs" role="tablist" aria-label="Views">
+      <button role="tab" data-tab="edit" aria-selected="true">Edit</button>
+      <button role="tab" data-tab="dataset" aria-selected="false">Dataset</button>
+    </nav>
     <span class="run" id="runName"></span>
     <span class="spacer"></span>
     <span class="pill" id="pill" data-kind="busy"><span class="dot"></span><span id="stage">connecting…</span></span>
@@ -128,6 +153,7 @@
   <div class="banner warn" id="warn" hidden></div>
   <div class="banner err" id="err" hidden><b id="errTitle"></b><pre id="errTrace"></pre></div>
 
+  <div class="tab" id="tab-edit">
   <div class="grid2">
     <section class="card">
       <div class="card-head"><h2>Losses</h2><span class="msg">per-epoch mean over batches, as train_vae records them · log scale</span></div>
@@ -168,6 +194,45 @@
       <div style="overflow-x:auto"><table><thead><tr><th>time</th><th>request</th><th>reply</th><th>detail</th><th class="num">ms</th></tr></thead><tbody id="msgBody"></tbody></table></div>
     </details>
   </section>
+  </div>
+
+  <div class="tab" id="tab-dataset" hidden>
+    <div class="placeholder" id="dsWait">The dataset report appears once the VAE has trained.</div>
+    <div class="tab" id="dsBody" hidden>
+      <section class="card">
+        <div class="card-head"><h2>Folder</h2><span class="msg" id="dsSummary"></span></div>
+        <div class="info" id="dsInfo"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>How much each attribute is encoded</h2><span class="msg">predicted from one latent frame, on clips the predictor didn't see</span></div>
+        <div style="overflow-x:auto"><table class="metric" id="dsReadable"></table></div>
+        <p class="note"><b>Generative latent:</b> a linear predictor from one frame of the generative model's latent to the attribute, trained on the other clips (k-fold by clip). This is the informativeness score of the DCI framework [1]. <b>R²</b> needs the right values; <b>rank r</b> (Spearman) needs only the right order, which is all the ranking loss asks for. <b>Within clips</b> is the median rank correlation inside each clip, which is what matters when editing one sound. <b>Between clips</b> ranks the clip averages.</p>
+        <p class="note"><b>After the VAE:</b> the same predictors applied to the latent after the full VAE round trip (encode, then decode). A drop means the VAE loses that attribute. <b>VAE code:</b> predicted from the VAE's own code instead. The VAE was trained on every clip's labels, so this column is optimistic.</p>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>Where each attribute varies</h2><span class="msg">share of its variance inside clips vs between clips</span></div>
+        <div class="split" id="dsSplit"></div>
+        <p class="note">Sliders edit within one sound. An attribute that mostly varies <b>between</b> clips teaches the VAE how sounds differ, not how one sound changes, so its slider can end up moving other attributes too.</p>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>How the attributes move together</h2><span class="msg">Pearson correlation</span></div>
+        <div class="matrices"><div><div class="msg">all frames</div><table class="metric" id="dsCorrFrames"></table></div><div><div class="msg" id="dsCorrClipsHead">clip averages</div><table class="metric" id="dsCorrClips"></table></div></div>
+        <p class="note" id="dsCorrNote"></p>
+      </section>
+
+      <section class="card">
+        <details><summary>Method and references</summary>
+          <p class="note">All numbers use the frames the backend trained the VAE on (from <code>prepare_data</code>), standardised as the VAE sees them, with the duplicate of the sample that <code>run_server</code> appends removed. Predictors are ridge regressions held out by clip, so a clip is never scored by a model that saw it.</p>
+          <ol class="refs">
+            <li>Eastwood &amp; Williams (2018). A framework for the quantitative evaluation of disentangled representations. ICLR. <a href="https://homepages.inf.ed.ac.uk/ckiw/postscript/iclr_final.pdf" target="_blank" rel="noopener">pdf</a></li>
+          </ol>
+        </details>
+      </section>
+    </div>
+  </div>
 </main>
 
 <script>
@@ -461,6 +526,64 @@ document.addEventListener('keydown', e => {
   a.paused ? a.play() : a.pause();
 });
 
+// ---------------------------------------------------------------- tabs
+const tabButtons = [...document.querySelectorAll('nav.tabs button')];
+function showTab(name) {
+  if (!tabButtons.some(b => b.dataset.tab === name)) name = 'edit';
+  for (const b of tabButtons) b.setAttribute('aria-selected', b.dataset.tab === name);
+  for (const t of document.querySelectorAll('main > .tab')) t.hidden = t.id !== 'tab-' + name;
+  if (location.hash.slice(1) !== name) history.replaceState(null, '', '#' + name);
+  if (name === 'dataset') loadDataset();
+  window.dispatchEvent(new Event('resize'));
+}
+for (const b of tabButtons) b.onclick = () => showTab(b.dataset.tab);
+
+// ---------------------------------------------------------------- shared table helpers
+const num = (v, d = 2) => v == null ? '—' : v.toFixed(d);
+// background tint for a score in [0, 1] (negative scores stay untinted)
+const tint = v => v == null || v <= 0 ? '' : `background: color-mix(in srgb, var(--accent) ${Math.round(Math.min(1, v) * 45)}%, transparent)`;
+// diverging tint for a value in [-1, 1]
+const dtint = v => v == null ? '' : `background: color-mix(in srgb, var(${v < 0 ? '--s1' : '--s2'}) ${Math.round(Math.min(1, Math.abs(v)) * 55)}%, transparent)`;
+const cell = (v, style = tint) => `<td class="num" style="${style(v)}">${num(v)}</td>`;
+
+// ---------------------------------------------------------------- Dataset tab
+let DS = null;
+async function loadDataset() {
+  if (DS) return;
+  const r = await fetch('/api/dataset');
+  if (!r.ok) { const j = await r.json().catch(() => ({})); $('#dsWait').textContent = j.error && j.error !== 'not ready yet' ? 'Dataset report failed: ' + j.error : 'The dataset report appears once the VAE has trained.'; setTimeout(() => { if (!$('#tab-dataset').hidden) loadDataset(); }, 2000); return; }
+  DS = await r.json(); renderDataset(DS);
+}
+function renderDataset(d) {
+  $('#dsWait').hidden = true; $('#dsBody').hidden = false;
+  $('#dsSummary').textContent = `${d.n_clips} clips · ${d.n_frames.toLocaleString()} frames`;
+  $('#dsInfo').innerHTML = [
+    ['clips', d.n_clips], ['frames', d.n_frames.toLocaleString()], ['latent dims', d.latent_dim],
+    ['frames per clip', `${Math.min(...d.frames_per_clip)}–${Math.max(...d.frames_per_clip)}`],
+    ['latent variance the VAE round trip explains', num(d.recon_r2)],
+    d.n_dropped ? ['duplicate clips left out', d.n_dropped] : null,
+  ].filter(Boolean).map(([k, v]) => `<span>${k} <b>${escapeHtml(v)}</b></span>`).join('');
+  const L = d.labels;
+  $('#dsReadable').innerHTML = `<thead>
+    <tr><th></th><th class="grp" colspan="4">generative latent</th><th class="grp" colspan="2">after the VAE</th><th class="grp" colspan="2">VAE code</th></tr>
+    <tr><th>attribute</th><th class="num">R²</th><th class="num">rank r</th><th class="num">within clips</th><th class="num">between clips</th><th class="num">R²</th><th class="num">rank r</th><th class="num">R²</th><th class="num">rank r</th></tr></thead><tbody>` +
+    L.map((l, j) => { const a = d.readable[j], b = d.after_vae[j], c = d.from_code[j];
+      return `<tr><td>${escapeHtml(l)}</td>${cell(a.r2)}${cell(a.spearman)}${cell(a.within)}${cell(a.between)}${cell(b.r2)}${cell(b.spearman)}${cell(c.r2)}${cell(c.spearman)}</tr>`; }).join('') + '</tbody>';
+  $('#dsSplit').innerHTML = `<span></span><span class="msg"><span class="swatch" style="background:var(--s1)"></span>within clips <span class="swatch" style="background:var(--s2);margin-left:10px"></span>between clips</span><span class="v">spread in a clip</span>` +
+    L.map((l, j) => { const w = Math.max(0, Math.min(1, d.within_share[j]));
+      return `<span>${escapeHtml(l)}</span><div class="track" title="${(100 * w).toFixed(0)}% within clips"><div style="width:${100 * w}%;background:var(--s1)"></div><div style="width:${100 * (1 - w)}%;background:var(--s2)"></div></div><span class="v">${num(d.range_within[j])} std</span>`; }).join('');
+  const matrix = (m, crit) => !m ? '<tbody><tr><td class="msg">needs at least 3 clips</td></tr></tbody>' :
+    `<thead><tr><th></th>${L.map(l => `<th class="num">${escapeHtml(l)}</th>`).join('')}</tr></thead><tbody>` +
+    m.map((row, i) => `<tr><td>${escapeHtml(L[i])}</td>${row.map((v, j) => i === j ? '<td class="num dim">1</td>' :
+      `<td class="num${crit && Math.abs(v) >= crit ? ' sig' : ''}" style="${dtint(v)}">${num(v)}</td>`).join('')}</tr>`).join('') + '</tbody>';
+  $('#dsCorrFrames').innerHTML = matrix(d.corr_frames, null);
+  $('#dsCorrClips').innerHTML = matrix(d.corr_clips, d.r_crit);
+  $('#dsCorrClipsHead').textContent = `clip averages (${d.n_clips} clips)`;
+  $('#dsCorrNote').innerHTML = `Across all frames the PCA attributes are uncorrelated by construction. The clip averages show whether the folder's sounds tangle them. A strong value means sounds high in one attribute also tend to be high (or low) in the other, and the VAE learns that pairing.` +
+    (d.r_crit ? ` Outlined cells are beyond ±${num(d.r_crit)}, the level a correlation of ${d.n_clips} clip averages needs before it is unlikely to be chance (p &lt; 0.05).` : '');
+}
+
+showTab(location.hash.slice(1) || 'edit');
 poll();
 </script>
 </body>
