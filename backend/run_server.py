@@ -141,6 +141,28 @@ def handle_request_load_folder(message):
         print(f"[load] ✗ {e}")
         return {"type": "error", "content": f"Error processing folder: {e}"}
 
+def make_decoder_check(sound_data, metadata_keys, pca, latent_mean, latent_std, latent_data):
+    """train_vae arguments for periodic checks on real decoded audio, or {} when they're off."""
+    cfg = setting('checks')
+    if not cfg.get('every'):
+        return {}
+    if feature_type not in ('pca', 'PCA', 'raw_features'):
+        print(f"[check] off: measuring {feature_type} features on every check would be too slow")
+        return {}
+    try:
+        from backend.timbre_VAE.decoder_check import DecoderCheck
+        # std of each attribute over the folder, before prepare_data standardises them
+        values = [np.concatenate([np.asarray(d['features_recon'][k], dtype=np.float64).ravel() for d in sound_data])
+                  for k in metadata_keys]
+        attr_std = np.array([v.std() + 1e-8 for v in values])
+        check = DecoderCheck(gen_model, sound_data, metadata_keys, attr_std, latent_mean, latent_std, latent_data,
+                             pca=pca, feature_type=feature_type, clips=cfg['clips'], seconds=cfg['seconds'],
+                             shift=cfg['shift'], smoothing=gen_model.delta_smoothing)
+        return {'check': check, 'check_every': int(cfg['every']), 'keep_best': bool(cfg['keep_best'])}
+    except Exception as e:
+        print(f"[check] off: {e}")
+        return {}
+
 # New: Handler for retraining VAE using last loaded features
 def handle_request_retrain_vae(message):
     global feature_paths, folder_path, audio_path, metadata_keys, _last_loaded_features
@@ -220,8 +242,12 @@ def handle_request_retrain_vae(message):
         # print("Initializing VAE...")
         print(f'[retrain] Initialised with input dim {input_dim_new}, {latent_dim_new}')
         vae = VAE(input_dim=input_dim_new, latent_dim=latent_dim_new)
+        # Checks of what the sliders do to real decoded audio while training (`checks` in settings.yaml)
+        check_args = make_decoder_check(sound_data, metadata_keys, pca if feature_type in ('pca', 'PCA') else None,
+                                        latent_mean, latent_std, latent_data)
         # Epochs, batch size, learning rate, loss weights and device: `training` / `devices` in backend/settings.yaml
-        vae, loss_lists, loss_labels = train_vae(vae, latent_data, metadata_vectors, plot_loss=False, **setting('training'))
+        vae, loss_lists, loss_labels = train_vae(vae, latent_data, metadata_vectors, plot_loss=False,
+                                                 **setting('training'), **check_args)
         print(f"[retrain] VAE trained — final loss: {loss_lists[0][-1]:.1f}")
         # Update global model (in-memory)
         timbre_gen_model = gen_model

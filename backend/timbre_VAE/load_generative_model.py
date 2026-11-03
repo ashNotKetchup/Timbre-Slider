@@ -295,7 +295,10 @@ class Model:
                 else:
                     lv_np = self.control_model.decode(torch.from_numpy(z)).cpu().numpy() * std + mean
             latent_vector = lv_np
+        return self.decode_latent(latent_vector)
 
+    def decode_latent(self, latent_vector: np.ndarray) -> np.ndarray:
+        """Decode a generative-model latent to mono audio, without the control model."""
         # A single (1, channels, frames) latent, as encode() returns it, is already in the
         # decoder's layout, so use it as is. Transposed, it becomes (frames, channels, 1), which
         # decoders without a streaming cache (e.g. Stable Audio) accept as a batch of one-frame

@@ -187,11 +187,23 @@ class TrainingHooks:
     def train(self, vae, latent_data, metadata_vectors, **kw):
         self.state.epochs = int(kw.get('num_epochs', 4000))
         self.state.info['frames'] = int(latent_data.shape[0])
-        self.state.info['train_args'] = {k: v for k, v in kw.items() if k != 'plot_loss'}
+        self.state.info['train_args'] = {k: v for k, v in kw.items() if k not in ('plot_loss', 'check')}
         self.state.set('training', f'{latent_data.shape[0]:,} frames')
         h = self.state.history
+        if kw.get('check') is not None:   # checks on real decoded audio (backend/settings.yaml: checks)
+            check = kw['check']
+
+            def recorded(vae_, epoch):
+                self.state.message = f'checking sliders on decoded audio at epoch {epoch}'
+                res = check(vae_, epoch)
+                self.state.info.setdefault('checks', []).append(res)
+                self.state.message = f'{latent_data.shape[0]:,} frames'
+                return res
+            kw = dict(kw, check=recorded)
         try:
             vae, loss_lists, labels = self.orig[0](vae, latent_data, metadata_vectors, **kw)
+            if getattr(vae, 'check_history', None):
+                self.state.info['best_epoch'] = vae.best_epoch
             self._close_epoch()
             for k, values in zip(LOSS_KEYS, loss_lists):  # the backend's own per-epoch numbers
                 h['loss'][k] = list(map(float, values))

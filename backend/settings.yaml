@@ -21,3 +21,10 @@ training:                  # train_vae() arguments used when the app retrains
 decoding:
   delta: true              # decode edits as a change added to the original latent
   smoothing: 1.5           # Gaussian sigma of that change, in latent frames (~70 ms with Stable Audio); 0 = off
+
+checks:                    # what the sliders do to real decoded audio, checked while training
+  every: 500               # epochs between checks (they start once the attribute loss is on). 0 = off.
+  clips: 2                 # excerpts of the folder used as probes
+  seconds: 2.0             # length of each excerpt
+  shift: 1.0               # each slider is moved up and down by this many spreads of its dim
+  keep_best: true          # end with the weights from the best check, not the last epoch

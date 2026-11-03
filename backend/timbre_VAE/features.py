@@ -80,6 +80,23 @@ def _compute_features(y_recon, sr, feature_types, use_mean=False):
     return out
 
 
+def measure_attributes(y, sr, metadata_keys, pca=None, feature_type='raw_features'):
+    """The attributes the VAE is trained on, measured on new audio and averaged over it.
+
+    With pca (feature_type pca), the raw features are projected with the fitted pipeline, as
+    pca_attributes does for the folder; otherwise metadata_keys are raw feature names. Returns one
+    value per key, in the order of metadata_keys.
+    """
+    feats = _compute_features(np.asarray(y, dtype=np.float32), sr, ['raw_features'])['raw_features']
+    if pca is not None:
+        flat = {k: np.asarray(v, dtype=np.float64).ravel() for k, v in feats.items()}
+        n = max(len(v) for v in flat.values())
+        rows = np.array([[flat[k][i] if k in flat and i < len(flat[k]) else np.nan
+                          for k in pca.feature_cols_] for i in range(n)])
+        return pca.transform(np.nan_to_num(rows)).mean(axis=0)
+    return np.array([float(np.mean(feats[k])) for k in metadata_keys])
+
+
 def _feature_worker_init():
     # The pool already spreads the files across cores, so each worker uses one thread.
     torch.set_num_threads(1)
@@ -526,6 +543,7 @@ def pca_attributes(array_of_dicts, key, n_dim=4, random_state=0, rotate=True):
         reducer = PCA(n_components=n_components, random_state=random_state)
     pca = make_pipeline(StandardScaler(), reducer)
     pca.fit(X)
+    pca.feature_cols_ = feature_cols   # input order, so new audio can be projected (measure_attributes)
 
     shares = ' / '.join(f'{v:.0%}' for v in pca[-1].explained_variance_ratio_)
     print(f"[features] PCA {n_components}D on standardised features{' (varimax)' if rotate else ''}, "

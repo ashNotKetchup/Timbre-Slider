@@ -265,10 +265,14 @@ def _fastest_training_device(vae, latent_data, metadata_data, batch_size, steps=
     return best
 
 
-def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=256, learning_rate=1e-2, plot_loss=False, alpha_max=10.0, beta_max=0.1, theta_max=10.0, device=None):
+def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=256, learning_rate=1e-2, plot_loss=False, alpha_max=10.0, beta_max=0.1, theta_max=10.0, device=None,
+              check=None, check_every=0, keep_best=True):
     # device: where to train (auto | cpu | mps | cuda). None uses devices.training in
     # backend/settings.yaml. auto times a few batches on each available device and uses the
     # fastest. The trained VAE is moved back to the CPU, where Model runs it.
+    # check: called as check(vae, epoch) every check_every epochs once the attribute loss is on,
+    # and after the last epoch; returns a dict with a 'score' (see decoder_check.DecoderCheck).
+    # keep_best: end with the weights from the best-scoring check.
     metadata_data = torch.tensor(
         np.concatenate(metadata_vectors, axis=0), dtype=torch.float32
     )
@@ -292,6 +296,8 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
     recon_loss_history = []
     kl_loss_history = []
     attr_loss_history = []
+
+    check_history, best = [], (-np.inf, None, None)   # (score, epoch, weights)
 
     if plot_loss:
         import matplotlib.pyplot as plt
@@ -363,6 +369,16 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
         kl_loss_history.append(float(kl_epoch) / n_batches)
         attr_loss_history.append(float(attr_epoch) / n_batches)
 
+        last = epoch == epochs - 1
+        if check is not None and check_every and theta > 0 and ((epoch + 1) % check_every == 0 or last):
+            try:
+                result = check(vae, epoch + 1)
+                check_history.append(result)
+                if keep_best and result['score'] > best[0]:
+                    best = (result['score'], epoch + 1, copy.deepcopy(vae.state_dict()))
+            except Exception as e:  # a failed check shouldn't lose the training run
+                print(f"[check] skipped at epoch {epoch + 1}: {e}")
+
         if plot_loss and (epoch % 5 == 0 or epoch == epochs - 1):
             ax.clear()
             ax.set_title(f"VAE Training Loss - Epoch {epoch}, alpha={alpha:.2f}, beta={beta:.2f}, theta={theta:.2f}")
@@ -386,6 +402,12 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
 
     seconds = time.time() - t_start
     print(f"[train] {epochs} epochs in {seconds:.1f} s ({1000 * seconds / max(1, epochs):.0f} ms/epoch) on {device}")
+    vae.check_history = check_history
+    vae.best_epoch = epochs
+    if keep_best and best[2] is not None and best[1] != epochs:
+        vae.load_state_dict(best[2])
+        vae.best_epoch = best[1]
+        print(f"[check] keeping the weights from epoch {best[1]} (score {best[0]:+.3f})")
     vae.to("cpu")
     vae.trained_on = str(device)
 
