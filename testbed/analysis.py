@@ -1,4 +1,5 @@
-"""Analysis of a trained control VAE on its folder, for the testbed's Dataset and Model tabs.
+"""Analysis of a trained control VAE on its folder, for the testbed's Dataset and Model tabs and for
+the editor's hints (confidence shading, nearest real sound, two-slider heatmap).
 
 Everything here works on the data the backend trained on (captured from `prepare_data`):
 the generative model's latent frames, standardised as the VAE sees them (X), the attribute
@@ -19,6 +20,7 @@ from sklearn.metrics import mutual_info_score, r2_score
 from sklearn.model_selection import GroupKFold
 from sklearn.neighbors import NearestNeighbors
 
+SR = 44100           # sample rate of the clips' audio in the feature cache
 SELF_WINDOW = 5      # frames either side of a frame that count as "the same moment" for distance-to-data
 N_STEPS = 9          # points along each slider traversal
 MAX_SRC = 400        # frames used for traversal statistics
@@ -73,11 +75,12 @@ class FolderData:
         self.keys = [str(k) for k in metadata_keys]
         self.labels = [k.replace('_', ' ').title() for k in self.keys]
         self.n_dropped = len(names) - len(keep_clips)
-        # index of each frame within its clip
+        # index of each frame within its clip, and the clip's audio (for "nearest real sound")
         self.pos = np.zeros(len(self.clip), dtype=np.int32)
         for c in range(len(self.files)):
             idx = np.where(self.clip == c)[0]
             self.pos[idx] = np.arange(len(idx))
+        self.audio = [sound_data[i].get('raw_audio') for i in keep_clips]
         self.n_frames = [int((self.clip == c).sum()) for c in range(len(self.files))]
 
     def clip_index(self, filename):
@@ -311,3 +314,127 @@ class Analysis:
                 'sliders': self.traversals(), 'landscape': self.landscape(), 'files': self.d.files,
             })
         return self._cache['model']
+
+    # ------------------------------------------------------------------ live helpers for the editor
+    def live(self, lr, gen_model):
+        """The sample as the backend currently holds it: editor <-> VAE code mapping and its frames."""
+        raw, z0 = gen_model._delta_ref
+        x = (raw - self.mean) / self.std
+        sc = lr._scaler
+        spread = (sc.global_max - sc.global_min) / 2
+        to_z = spread / lr.json_value_range        # one editor unit, in VAE-code units
+        tc = lr._time_compressor
+        return x.astype(np.float32), z0.astype(np.float32), float(to_z), tc, lr
+
+    def editor_to_code(self, data, lr):
+        """Editor trajectories (dims x decimated time, ±2 units) -> VAE code (frames, dims), as from_json does."""
+        v = np.asarray(data, dtype=np.float32)[np.newaxis]
+        z = lr._scaler.descale(lr._time_compressor.up_scale(v), output_range=lr.json_value_range)
+        return z[0].T.astype(np.float32)
+
+    def _src(self, frames):
+        sc = self.sample_clip if self.sample_clip is not None else -1
+        n = self.d.n_frames[sc] if sc >= 0 else 0
+        return np.full(len(frames), sc), np.clip(frames, 0, max(n - 1, 0))
+
+    def confidence(self, lr, gen_model, lo, hi, n_values=24):
+        """Distance to data if one dim at one editor point were set to each value, the rest unedited,
+        plus the unedited sound's own distance at each point (the shading shows the increase over it)."""
+        x, z0, to_z, tc, _ = self.live(lr, gen_model)
+        base = tc.init_lo_res[0]                                   # (dims, T_lo) in editor units
+        dims, T = base.shape
+        frames = np.minimum(np.arange(T) * tc.factor_used, len(z0) - 1)
+        vals = np.linspace(lo, hi, n_values)
+        zf, xf = z0[frames], x[frames]
+        d0 = self.dec(zf)
+        src_c, src_p = self._src(frames)
+        out = np.zeros((dims, T, n_values), dtype=np.float32)
+        unedited = self.dist_to_data(xf, src_c, src_p)
+        for d in range(dims):
+            for g, v in enumerate(vals):
+                z = zf.copy()
+                z[:, d] += (v - base[d]) * to_z
+                out[d, :, g] = self.dist_to_data(xf + self.dec(z) - d0, src_c, src_p)
+        return {'values': vals, 'dist': out, 'unedited': unedited}
+
+    def edited_frames(self, data, lr, gen_model):
+        x, z0, to_z, tc, _ = self.live(lr, gen_model)
+        z = self.editor_to_code(data, lr)
+        n = min(len(z), len(z0))
+        change = self.dec(z[:n]) - self.dec(z0[:n])
+        return x[:n] + change, np.linalg.norm(change, axis=1)
+
+    def nearest(self, data, lr, gen_model, top=3):
+        """The real frames closest to the edited sound where the edit changes it most."""
+        xe, change = self.edited_frames(data, lr, gen_model)
+        frames = np.arange(len(xe))
+        src_c, src_p = self._src(frames)
+        dist = self.dist_to_data(xe, src_c, src_p)
+        if change.max() < 1e-4:
+            return {'edited': False, 'max_dist': float(dist.max()), 'median_dist': float(np.median(dist))}
+        f = int(np.argmax(change))
+        d, i = self.nn.kneighbors(xe[f:f + 1], n_neighbors=min(200, len(self.d.X)))
+        hits, used = [], set()
+        for dd, ii in zip(d[0], i[0]):
+            c = int(self.d.clip[ii])
+            if c == src_c[0] and abs(int(self.d.pos[ii]) - f) <= SELF_WINDOW:
+                continue
+            if c in used:
+                continue
+            used.add(c)
+            hop = self._hop(c)
+            hits.append({'clip': c, 'file': self.d.files[c], 'frame': int(self.d.pos[ii]),
+                         'time': float(self.d.pos[ii] * hop / SR) if hop else None,
+                         'dist': float(dd / self.base_dist)})
+            if len(hits) >= top:
+                break
+        hop_s = self._hop(src_c[0]) if src_c[0] >= 0 else None
+        return {'edited': True, 'frame': f, 'time': float(f * hop_s / SR) if hop_s else None,
+                'max_dist': float(dist.max()), 'median_dist': float(np.median(dist)),
+                'dist_at_frame': float(dist[f]), 'hits': hits}
+
+    def _hop(self, c):
+        a = self.d.audio[c]
+        return len(a) / self.d.n_frames[c] if a is not None and self.d.n_frames[c] else None
+
+    def snippet(self, c, time_s, seconds=2.0):
+        a = self.d.audio[c]
+        if a is None:
+            return None
+        a = np.asarray(a, dtype=np.float32).reshape(-1)
+        mid = int(time_s * SR)
+        half = int(seconds * SR / 2)
+        s0, s1 = max(0, mid - half), min(len(a), mid + half)
+        seg = a[s0:s1].copy()
+        fade = min(len(seg) // 4, int(0.02 * SR))
+        if fade:
+            ramp = np.linspace(0, 1, fade, dtype=np.float32)
+            seg[:fade] *= ramp
+            seg[-fade:] *= ramp[::-1]
+        return seg
+
+    def heatmap(self, data, lr, gen_model, a, b, quantity, span=2.0, n=21, max_frames=60):
+        """Offset two dims across the whole clip (editor units) and map the result: distance to data,
+        or the predicted change in one attribute (std units), relative to the unedited sound."""
+        x, z0, to_z, tc, _ = self.live(lr, gen_model)
+        z = self.editor_to_code(data, lr)
+        m = min(len(z), len(z0))
+        idx = np.linspace(0, m - 1, min(max_frames, m)).astype(int)
+        zc, zr, xr = z[idx], z0[idx], x[idx]
+        dref = self.dec(zr)
+        offs = np.linspace(-span, span, n)
+        grid = np.zeros((n, n), dtype=np.float32)
+        src_c, src_p = self._src(idx)
+        p0 = self.predictor.predict(xr) if quantity != 'dist' else None
+        j = int(quantity.split(':')[1]) if quantity.startswith('attr') else None
+        for iy, ob in enumerate(offs):
+            for ix, oa in enumerate(offs):
+                zz = zc.copy()
+                zz[:, a] += oa * to_z
+                zz[:, b] += ob * to_z
+                xe = xr + self.dec(zz) - dref
+                if quantity == 'dist':
+                    grid[iy, ix] = np.percentile(self.dist_to_data(xe, src_c, src_p), 90)
+                else:
+                    grid[iy, ix] = np.median(self.predictor.predict(xe)[:, j] - p0[:, j])
+        return {'offsets': offs, 'grid': grid, 'a': a, 'b': b, 'quantity': quantity}

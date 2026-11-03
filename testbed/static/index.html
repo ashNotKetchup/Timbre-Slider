@@ -139,6 +139,14 @@
   .mapwrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
   select { font: inherit; font-size: 13px; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); }
   .ramp { display: inline-block; width: 120px; height: 8px; border-radius: 4px; vertical-align: middle; margin: 0 6px; }
+  .nearest { margin-top: 10px; font-size: 12.5px; color: var(--ink-2); }
+  .nearest .hit { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; padding: 6px 0; border-top: 1px solid var(--grid); }
+  .nearest .hit b { color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
+  .nearest audio { height: 28px; width: 220px; max-width: 100%; }
+  .hm { display: grid; grid-template-columns: minmax(0, 520px) minmax(0, 1fr); gap: 16px; align-items: start; margin-top: 10px; }
+  @media (max-width: 900px) { .hm { grid-template-columns: minmax(0, 1fr); } }
+  .hmwrap { position: relative; aspect-ratio: 1 / 1; max-width: 520px; cursor: pointer; }
+  .hmwrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
   .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 5px; }
 </style>
 </head>
@@ -179,6 +187,7 @@
         <div class="player"><div class="t">VAE recon <span>full VAE decode, unedited</span></div><audio id="aVae" controls preload="auto"></audio><img id="sVae" alt="Spectrogram of the unedited reconstruction"></div>
         <div class="player"><div class="t">Edited <span id="editName">draw below to make one</span></div><audio id="aEdit" controls preload="auto"></audio><img id="sEdit" alt="Spectrogram of the edited decode"></div>
       </div>
+      <div class="nearest" id="nearest"></div>
     </section>
   </div>
 
@@ -191,11 +200,30 @@
       <button class="primary" id="decodeBtn" disabled>Decode</button>
       <label class="check"><input type="checkbox" id="autoDecode" checked> decode on release</label>
       <label class="check"><input type="checkbox" id="autoPlay" checked> play after decode</label>
+      <label class="check" title="Shade values that, set on that dimension alone, would take that moment further from anything in the folder than it is now"><input type="checkbox" id="confShade" checked> confidence shading</label>
       <button id="resetAll" disabled>Reset all</button>
       <span class="spacer"></span>
-      <span class="keyline"><span><i style="border-color:var(--muted)"></i>encoded</span><span><i style="border-color:var(--s1)"></i>edited</span><span><span class="kbd">space</span> play / pause edited</span></span>
+      <span class="keyline"><span><i style="border-color:var(--muted)"></i>encoded</span><span><i style="border-color:var(--s1)"></i>edited</span><span><span class="swatch" style="background:color-mix(in srgb, var(--s2) 45%, transparent)"></span>far from the folder</span><span><span class="kbd">space</span> play / pause edited</span></span>
     </div>
     <div class="rows" id="rows"><div class="placeholder">Trajectories appear once the VAE has trained and the sample is encoded.</div></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Two-slider map</h2><span class="msg">what moving two dimensions together would do to the current edit; click to apply</span></div>
+    <div class="toolbar">
+      <label class="check">x <select id="hmA"></select></label>
+      <label class="check">y <select id="hmB"></select></label>
+      <label class="check">show <select id="hmQ"></select></label>
+      <label class="check">range <select id="hmSpan"><option value="0.5">±0.5</option><option value="1" selected>±1</option><option value="2">±2</option></select></label>
+      <span class="msg" id="hmStatus"></span>
+    </div>
+    <div class="hm">
+      <div class="hmwrap" id="hmWrap"><canvas id="hmCanvas" role="img" aria-label="Map of two slider offsets"></canvas><div class="tip" id="hmTip"></div></div>
+      <div>
+        <div class="msg" id="hmKey"></div>
+        <p class="note">Each cell adds the same offset to two dimensions over the whole clip, in editor units, starting from the current edit (the ring marks it). <b>Distance to seen sounds</b> is the 90th percentile over the clip's frames of the distance to the nearest real frame in the folder, in units of the typical gap between real frames; above about 1.5 the sound is somewhere the folder has nothing like. <b>Change in an attribute</b> is the median change the folder's latent-to-attribute predictor reads, in std units, relative to the unedited sound. Nothing is decoded to audio until you click. This follows the attribute surface plots of Pati &amp; Lerch and the surface and data-density maps of Bryan-Kinns et al. (references in the Model tab).</p>
+      </div>
+    </div>
   </section>
 
   <section class="card">
@@ -493,6 +521,15 @@ new ResizeObserver(() => drawLoss()).observe($('#lossWrap'));
 
 // ---------------------------------------------------------------- trajectory editor
 const TJ = { T: 0, dims: 0, base: [], draw: [], lo: -2.5, hi: 2.5, rows: [] };
+let CONF = null;   // distance to the folder per dim, editor point and value (from /api/confidence)
+async function loadConfidence() {
+  try {
+    const r = await fetch(`/api/confidence?lo=${TJ.lo}&hi=${TJ.hi}`);
+    if (!r.ok) { setTimeout(loadConfidence, 3000); return; }
+    CONF = await r.json(); for (let d = 0; d < TJ.dims; d++) drawRow(d);
+  } catch (e) { /* hints are optional */ }
+}
+$('#confShade').onchange = () => { for (let d = 0; d < TJ.dims; d++) drawRow(d); };
 
 function buildTrajectories(smp) {
   const rows = $('#rows'); rows.innerHTML = '';
@@ -518,6 +555,7 @@ function buildTrajectories(smp) {
     new ResizeObserver(() => drawRow(d)).observe(plot);
   }
   $('#decodeBtn').disabled = false; $('#resetAll').disabled = false;
+  loadConfidence(); setupHeatmap(smp);
 }
 $('#resetAll').onclick = () => { for (let d = 0; d < TJ.dims; d++) { TJ.draw[d] = Float32Array.from(TJ.base[d]); drawRow(d); } edited(); };
 
@@ -525,6 +563,17 @@ function drawRow(d) {
   const {canvas} = TJ.rows[d]; const [ctx, W, Hh] = sizeCanvas(canvas);
   const T = TJ.T, x = i => T > 1 ? 6 + i / (T - 1) * (W - 12) : W / 2, y = v => Hh - 6 - (v - TJ.lo) / (TJ.hi - TJ.lo) * (Hh - 12);
   ctx.clearRect(0, 0, W, Hh);
+  if (CONF && $('#confShade').checked && CONF.dist[d]) {   // far-from-the-folder shading for this dim
+    const vals = CONF.values, G = vals.length, dv = vals[1] - vals[0], cw = T > 1 ? (W - 12) / (T - 1) : W;
+    ctx.fillStyle = css('--s2');
+    for (let i = 0; i < T; i++) for (let g = 0; g < G; g++) {
+      // shade the increase over the unedited sound's own distance at that moment
+      const a = Math.max(0, Math.min(1, (CONF.dist[d][i][g] - CONF.unedited[i] - 0.15) / 0.6)) * .5; if (a < .02) continue;
+      ctx.globalAlpha = a; const yt = y(vals[g] + dv / 2), yb = y(vals[g] - dv / 2);
+      ctx.fillRect(x(i) - cw / 2, yt, cw + .5, yb - yt + .5);
+    }
+    ctx.globalAlpha = 1;
+  }
   ctx.strokeStyle = css('--grid'); ctx.lineWidth = 1; const y0 = Math.round(y(0)) + .5;
   ctx.beginPath(); ctx.moveTo(0, y0); ctx.lineTo(W, y0); ctx.stroke();
   const line = (arr, color, width, dots) => {
@@ -573,10 +622,108 @@ async function decode() {
     setSrc('#aEdit', j.audio); if (j.spectrogram) setSrc('#sEdit', j.spectrogram);
     $('#editName').textContent = j.name;
     if ($('#autoPlay').checked && !pending) $('#aEdit').play().catch(() => {});
+    if (!pending) { updateNearest(data); refreshHeatmap(); }
   } catch (e) { $('#editName').textContent = 'error: ' + e.message; }
   decoding = false; $('#decodeBtn').disabled = false; $('#decodeBtn').textContent = 'Decode';
   if (pending) { pending = false; decode(); }
 }
+
+// ---------------------------------------------------------------- nearest real sounds
+const currentData = () => { const out = []; for (let d = 0; d < TJ.dims; d++) out.push(Array.from(TJ.draw[d], v => +v.toFixed(5))); return out; };
+async function updateNearest(data) {
+  try {
+    const r = await fetch('/api/nearest', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({data})});
+    const n = await r.json(); if (!r.ok || n.error) { $('#nearest').innerHTML = ''; return; }
+    if (!n.edited) { $('#nearest').innerHTML = `<div>Unedited: the sound sits ${num(n.median_dist)}× the typical gap from other moments in the folder (at most ${num(n.max_dist)}×).</div>`; return; }
+    const where = n.time != null ? ` at ${n.time.toFixed(1)} s` : '';
+    $('#nearest').innerHTML = `<div><b>Nearest real sounds</b> to where the edit changes the sound most${where}. The edit sits ${num(n.dist_at_frame)}× the typical gap between real moments there (furthest point ${num(n.max_dist)}×)${n.max_dist > 1.5 ? ', outside what the folder covers' : ''}.</div>` +
+      n.hits.map(h => `<div class="hit"><span><b>${escapeHtml(h.file)}</b> · ${h.time != null ? h.time.toFixed(1) + ' s' : 'frame ' + h.frame} · ${num(h.dist)}×</span>${h.audio ? `<audio controls preload="none" src="${h.audio}"></audio>` : ''}</div>`).join('');
+  } catch (e) { /* optional */ }
+}
+
+// ---------------------------------------------------------------- two-slider heatmap
+let HM = null, hmBusy = false, hmAgain = false;
+function setupHeatmap(smp) {
+  const opts = smp.labels.map((l, k) => `<option value="${k}">${escapeHtml(l)}</option>`).join('');
+  $('#hmA').innerHTML = opts; $('#hmB').innerHTML = opts; $('#hmB').value = Math.min(1, smp.labels.length - 1);
+  $('#hmQ').innerHTML = `<option value="dist">distance to seen sounds</option>` +
+    smp.labels.slice(0, smp.n_attr).map((l, j) => `<option value="attr:${j}">change in ${escapeHtml(l)}</option>`).join('');
+  for (const id of ['#hmA', '#hmB', '#hmQ', '#hmSpan']) $(id).onchange = refreshHeatmap;
+  refreshHeatmap();
+}
+async function refreshHeatmap() {
+  if (!TJ.T) return;
+  if (hmBusy) { hmAgain = true; return; }
+  hmBusy = true; $('#hmStatus').textContent = 'computing…';
+  try {
+    const body = {data: currentData(), a: +$('#hmA').value, b: +$('#hmB').value, quantity: $('#hmQ').value, span: +$('#hmSpan').value};
+    const r = await fetch('/api/heatmap', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    const j = await r.json();
+    if (!r.ok || j.error) { $('#hmStatus').textContent = j.error || 'not available'; }
+    else { HM = j; $('#hmStatus').textContent = ''; drawHeatmap(); }
+  } catch (e) { $('#hmStatus').textContent = 'not available'; }
+  hmBusy = false; if (hmAgain) { hmAgain = false; refreshHeatmap(); }
+}
+function hmColour(v) {
+  if (HM.quantity === 'dist') {   // light up to 1 (as close as real frames are), then to orange by 2
+    const t = Math.max(0, Math.min(1, (v - 1) / 1));
+    return `color-mix(in srgb, var(--s2) ${Math.round(8 + 80 * t)}%, var(--surface))`;
+  }
+  const t = Math.max(-1, Math.min(1, v / HM._m));
+  return `color-mix(in srgb, var(${t < 0 ? '--s1' : '--s2'}) ${Math.round(85 * Math.abs(t))}%, var(--surface))`;
+}
+function drawHeatmap() {
+  if (!HM) return;
+  const c = $('#hmCanvas'), [ctx, W, Hh] = sizeCanvas(c), n = HM.offsets.length;
+  HM._m = Math.max(0.1, ...HM.grid.flat().map(Math.abs));
+  const pad = {l: 34, b: 30, t: 6, r: 6}, cw = (W - pad.l - pad.r) / n, ch = (Hh - pad.t - pad.b) / n;
+  ctx.clearRect(0, 0, W, Hh);
+  const probe = document.createElement('span'); document.body.appendChild(probe);
+  for (let iy = 0; iy < n; iy++) for (let ix = 0; ix < n; ix++) {
+    probe.style.color = hmColour(HM.grid[iy][ix]); ctx.fillStyle = getComputedStyle(probe).color;
+    ctx.fillRect(pad.l + ix * cw, pad.t + (n - 1 - iy) * ch, cw + .5, ch + .5);
+  }
+  probe.remove();
+  const mid = (n - 1) / 2;
+  ctx.strokeStyle = css('--ink'); ctx.lineWidth = 2; ctx.beginPath();
+  ctx.arc(pad.l + (mid + .5) * cw, pad.t + (n - 1 - mid + .5) * ch, Math.min(cw, ch) * .7, 0, 7); ctx.stroke();
+  ctx.fillStyle = css('--muted'); ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  const A = $('#hmA').selectedOptions[0].textContent, B = $('#hmB').selectedOptions[0].textContent;
+  for (const i of [0, mid, n - 1]) ctx.fillText((HM.offsets[i] > 0 ? '+' : '') + HM.offsets[i].toFixed(1), pad.l + (i + .5) * cw, Hh - pad.b + 4);
+  ctx.fillText(`${A} offset →`, pad.l + (W - pad.l) / 2, Hh - 13);
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (const i of [0, mid, n - 1]) ctx.fillText((HM.offsets[i] > 0 ? '+' : '') + HM.offsets[i].toFixed(1), pad.l - 4, pad.t + (n - 1 - i + .5) * ch);
+  ctx.save(); ctx.translate(10, pad.t + (Hh - pad.t - pad.b) / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.fillText(`${B} offset →`, 0, 0); ctx.restore();
+  HM._geom = {pad, cw, ch, n};
+  $('#hmKey').innerHTML = HM.quantity === 'dist'
+    ? `distance to seen sounds: <span class="ramp" style="background: linear-gradient(90deg, color-mix(in srgb, var(--s2) 8%, var(--surface)), color-mix(in srgb, var(--s2) 88%, var(--surface)))"></span> 1× → 2× the typical gap`
+    : `predicted change: <span class="ramp" style="background: linear-gradient(90deg, var(--s1), var(--surface), var(--s2))"></span> −${num(HM._m)} → +${num(HM._m)} std`;
+}
+function hmCell(e) {
+  if (!HM || !HM._geom) return null;
+  const r = $('#hmWrap').getBoundingClientRect(), {pad, cw, ch, n} = HM._geom;
+  const ix = Math.floor((e.clientX - r.left - pad.l) / cw), iy = n - 1 - Math.floor((e.clientY - r.top - pad.t) / ch);
+  return ix >= 0 && ix < n && iy >= 0 && iy < n ? [ix, iy] : null;
+}
+$('#hmWrap').addEventListener('pointermove', e => {
+  const cellAt = hmCell(e), tip = $('#hmTip'); if (!cellAt) { tip.style.display = 'none'; return; }
+  const [ix, iy] = cellAt, v = HM.grid[iy][ix];
+  tip.innerHTML = `${$('#hmA').selectedOptions[0].textContent} ${HM.offsets[ix] >= 0 ? '+' : ''}${HM.offsets[ix].toFixed(2)}, ${$('#hmB').selectedOptions[0].textContent} ${HM.offsets[iy] >= 0 ? '+' : ''}${HM.offsets[iy].toFixed(2)}<br>` +
+    (HM.quantity === 'dist' ? `${num(v)}× the typical gap` : `${v >= 0 ? '+' : ''}${num(v)} std`);
+  const r = $('#hmWrap').getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  tip.style.display = 'block'; tip.style.left = (px + 14 + tip.offsetWidth > r.width ? px - 14 - tip.offsetWidth : px + 14) + 'px'; tip.style.top = (py + 12) + 'px';
+});
+$('#hmWrap').addEventListener('pointerleave', () => { $('#hmTip').style.display = 'none'; });
+$('#hmWrap').addEventListener('click', e => {
+  const cellAt = hmCell(e); if (!cellAt || !TJ.T) return;
+  const [ix, iy] = cellAt, a = +$('#hmA').value, b = +$('#hmB').value;
+  const oa = HM.offsets[ix], ob = HM.offsets[iy];
+  if (!oa && !ob) return;
+  for (let i = 0; i < TJ.T; i++) { TJ.draw[a][i] += oa; if (b !== a) TJ.draw[b][i] += ob; }
+  drawRow(a); if (b !== a) drawRow(b);
+  edited(); if (!$('#autoDecode').checked) refreshHeatmap();
+});
+new ResizeObserver(() => drawHeatmap()).observe($('#hmWrap'));
 
 // ---------------------------------------------------------------- playhead + keys
 const players = ['#aOriginal', '#aVae', '#aEdit'].map(s => $(s));

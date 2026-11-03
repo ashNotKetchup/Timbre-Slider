@@ -63,6 +63,12 @@ def make_server(tb, state, port):
                 if state.analysis is None:
                     return self._json({'error': state.info.get('analysis_error') or 'not ready yet'}, 409)
                 return self._json(state.analysis.model())
+            if p == '/api/confidence':
+                q = parse_qs(url.query)
+                try:
+                    return self._json(tb.confidence(float(q['lo'][0]), float(q['hi'][0])))
+                except Exception as e:
+                    return self._json({'error': str(e)}, 409)
             if p.startswith('/audio/'):
                 name = Path(p).name  # no directory traversal
                 return self._file(tb.audio_dir / name)
@@ -79,6 +85,14 @@ def make_server(tb, state, port):
                 self._json({'ok': True})
                 threading.Thread(target=self.server.shutdown, daemon=True).start()
                 return
+            if p in ('/api/nearest', '/api/heatmap'):
+                try:
+                    if p == '/api/nearest':
+                        return self._json(tb.nearest(body['data']))
+                    return self._json(tb.heatmap(body['data'], body['a'], body['b'], body.get('quantity', 'dist'),
+                                                 body.get('span', 1.0)))
+                except Exception as e:
+                    return self._json({'error': str(e)}, 409)
             if p == '/api/decode':
                 if state.stage != 'ready':
                     return self._json({'error': f'not ready ({state.stage})'}, 409)

@@ -103,7 +103,7 @@ class State:
         self.sample = {}
         self.messages = []   # recent request/response pairs, for the UI
         self.decode_count = 0
-        self.analysis = None  # testbed.analysis.Analysis once the VAE has trained (Dataset and Model tabs)
+        self.analysis = None  # testbed.analysis.Analysis once the VAE has trained (tabs and editor hints)
 
     def set(self, stage, message=''):
         self.stage, self.message = stage, message
@@ -438,6 +438,40 @@ class Testbed:
         with open(self.audio_dir / f'{name}.json', 'w') as f:
             json.dump(lj, f)
         return {'audio': url, 'spectrogram': spec, 'name': name}
+
+    # ---- editor hints (need the VAE and the encoded sample; read-only, so no backend lock)
+    def _hint_args(self):
+        an = self.state.analysis
+        if an is None or self.latent_json is None or getattr(rs.gen_model, '_delta_ref', None) is None:
+            raise BackendError('hints need the trained VAE and the encoded sample')
+        return an, rs.latent_representation, rs.gen_model
+
+    def confidence(self, lo, hi):
+        an, lr, gm = self._hint_args()
+        out = an.confidence(lr, gm, lo, hi)
+        return {'values': out['values'].round(4).tolist(), 'dist': out['dist'].round(3).tolist(),
+                'unedited': out['unedited'].round(3).tolist()}
+
+    def nearest(self, data):
+        """Closest real moments in the folder to the edited sound, with a short clip of each to play."""
+        an, lr, gm = self._hint_args()
+        res = an.nearest(data, lr, gm)
+        for h in res.get('hits', []):
+            if h['time'] is None:
+                continue
+            seg = an.snippet(h['clip'], h['time'])
+            if seg is not None:
+                name = f"nearest_{h['clip']}_{h['frame']}.wav"
+                if not (self.audio_dir / name).exists():
+                    sf.write(self.audio_dir / name, seg, 44100)
+                h['audio'] = f'/audio/{name}'
+        return res
+
+    def heatmap(self, data, a, b, quantity, span):
+        an, lr, gm = self._hint_args()
+        out = an.heatmap(data, lr, gm, int(a), int(b), quantity, span=float(span))
+        return {'offsets': out['offsets'].round(4).tolist(), 'grid': out['grid'].round(4).tolist(),
+                'a': out['a'], 'b': out['b'], 'quantity': out['quantity']}
 
     def _save_stats(self):
         """Add the latent mean/std the backend now keeps (Model.control_stats) to the run's vae.pt."""

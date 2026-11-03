@@ -32,6 +32,14 @@ The `devices` defaults pick whatever runs fastest:
 
 To compare settings, look at the console lines `[features] ... encode + reconstruct ... s`, `[train] auto device: ...`, `[train] ... ms/epoch` and `[model] Decoded ... s`, or at the ms column of the page's Backend messages.
 
+## Hints in the editor
+
+The Edit tab gives three hints about where an edit is taking the sound. None of them decodes audio. They use the trained VAE, the folder's frames and the latent-to-attribute predictor described under the Model tab.
+
+- **Confidence shading** on each trajectory row. A cell is shaded when setting that dimension alone to that value, at that moment, would take the sound further from anything in the folder than it already is. The distance is to the nearest real frame, in units of the typical gap between real frames.
+- **Nearest real sounds**, under the Edited player after each decode. These are the folder moments closest to the edited sound where the edit changes it most, each with a 2-second clip to play, and a note on how far the edit is from the folder.
+- **Two-slider map.** Pick two dimensions to see what offsetting both across the whole clip would do to the current edit: either distance to seen sounds, or the predicted change in one attribute. Click a cell to apply that offset and decode.
+
 ## How it talks to the backend
 
 The testbed imports `backend/run_server.py` and passes it the same message dicts the Max patch sends. They are round-tripped through JSON, so they are exactly what its HTTP server would receive:
