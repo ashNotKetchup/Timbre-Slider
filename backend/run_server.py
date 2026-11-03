@@ -229,6 +229,7 @@ def handle_request_retrain_vae(message):
         timbre_gen_model.control_vae_latent_dim=latent_dim_new
         timbre_gen_model.control_model = vae
         timbre_gen_model.control_stats = (latent_mean, latent_std)
+        timbre_gen_model.control_range = control_range(vae, latent_data)
         print(f"[retrain] Model updated for {_last_loaded_features['folder_path']}")
         # Encode the example audio with the new VAE and include latent in reply
         latent_reply = handle_request_latent({"type": "request_latent", "content": audio_path})
@@ -242,6 +243,17 @@ def handle_request_retrain_vae(message):
     except Exception as e:
         print(f"[retrain] ✗ {e}")
         return {"type": "error", "content": f"Error retraining VAE: {e}"}
+
+def control_range(vae, latent_data):
+    """(low, high) of each control dim over the training frames, at the percentiles in
+    controls.percentiles: the values each slider's ±2 should span."""
+    lo_pct, hi_pct = setting('controls', 'percentiles')
+    with torch.no_grad():
+        z = vae.encode_mu(latent_data.cpu()).numpy()
+    low, high = np.percentile(z, lo_pct, axis=0), np.percentile(z, hi_pct, axis=0)
+    print("[retrain] slider ranges: " + ", ".join(f"{a:.2f}..{b:.2f}" for a, b in zip(low, high)))
+    return low.astype(np.float32), high.astype(np.float32)
+
 
 def handle_request_latent(message):
     global audio_path, metadata_keys, timbre_gen_model
@@ -274,7 +286,10 @@ def handle_request_latent(message):
 
         # to json
         latent_representation.set_latent_representation(latent_vector, latent_text)
-        latent_representation.fit(output_range=2)
+        # Each slider spans what its dim covers over the folder (controls.range: folder), or one
+        # min/max over all dims of this clip (controls.range: clip, as before)
+        ranges = timbre_gen_model.control_range if setting('controls', 'range') == 'folder' else None
+        latent_representation.fit(output_range=2, ranges=ranges)
         latent_json = latent_representation.to_json()
         assert isinstance(latent_json, dict), 'json not a dictionary'
 

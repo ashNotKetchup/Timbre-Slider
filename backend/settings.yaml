@@ -21,3 +21,10 @@ training:                  # train_vae() arguments used when the app retrains
 decoding:
   delta: true              # decode edits as a change added to the original latent
   smoothing: 1.5           # Gaussian sigma of that change, in latent frames (~70 ms with Stable Audio); 0 = off
+
+controls:
+  range: folder            # folder: each slider's ±2 spans what that dim covers over the training folder
+                           # (between the percentiles below), so every slider moves across real values.
+                           # clip: one min/max over all dims of the current clip (the old behaviour;
+                           # dims with a small spread get squeezed into a sliver of their slider).
+  percentiles: [1, 99]

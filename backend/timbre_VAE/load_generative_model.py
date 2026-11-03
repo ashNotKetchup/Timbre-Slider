@@ -112,6 +112,8 @@ class Model:
         # (mean, std) of the latents the control VAE was trained on, each (1, latent channels).
         # Set together with control_model; encode/decode convert to and from those units.
         self.control_stats = None
+        # (low, high) per control dim over the training folder: the range each slider spans
+        self.control_range = None
         # Decode edits as a change to the original latent (see decode). delta_smoothing is a
         # Gaussian sigma in latent frames (1.5 is about 70 ms for Stable Audio); 0 turns it off.
         # Both come from `decoding` in backend/settings.yaml.
@@ -419,14 +421,21 @@ class LatentRepresentation:
     #     s = s.replace("][", "],[")
     #     return s
 
-    def fit(self, output_range: float = 2):
+    def fit(self, output_range: float = 2, ranges=None):
         """
         fits a scaler to the currently held latent representation.
         This scaler is applied to json input and output only.
+
+        ranges: optional (low, high) per channel, e.g. the range each control dim covers over the
+        training folder. Then ±output_range in the json is that range for every channel. Without it,
+        one min/max over all channels of this clip is used.
         """
 
         ## fit scaler
-        self._scaler.fit(self._latent_vector)
+        if ranges is not None:
+            self._scaler.set_range(*ranges)
+        else:
+            self._scaler.fit(self._latent_vector)
         self.json_value_range = output_range
 
         ## Time compression

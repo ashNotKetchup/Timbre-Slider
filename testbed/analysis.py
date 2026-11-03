@@ -321,10 +321,11 @@ class Analysis:
         raw, z0 = gen_model._delta_ref
         x = (raw - self.mean) / self.std
         sc = lr._scaler
-        spread = (sc.global_max - sc.global_min) / 2
-        to_z = spread / lr.json_value_range        # one editor unit, in VAE-code units
+        spread = np.asarray((sc.global_max - sc.global_min) / 2, dtype=np.float32).reshape(-1)
+        # one editor unit, in VAE-code units, per dim (the scaler may be one range for all dims or one per dim)
+        to_z = np.broadcast_to(spread / lr.json_value_range, (z0.shape[1],)).copy()
         tc = lr._time_compressor
-        return x.astype(np.float32), z0.astype(np.float32), float(to_z), tc, lr
+        return x.astype(np.float32), z0.astype(np.float32), to_z, tc, lr
 
     def editor_to_code(self, data, lr):
         """Editor trajectories (dims x decimated time, ±2 units) -> VAE code (frames, dims), as from_json does."""
@@ -353,7 +354,7 @@ class Analysis:
         for d in range(dims):
             for g, v in enumerate(vals):
                 z = zf.copy()
-                z[:, d] += (v - base[d]) * to_z
+                z[:, d] += (v - base[d]) * to_z[d]
                 out[d, :, g] = self.dist_to_data(xf + self.dec(z) - d0, src_c, src_p)
         return {'values': vals, 'dist': out, 'unedited': unedited}
 
@@ -430,8 +431,8 @@ class Analysis:
         for iy, ob in enumerate(offs):
             for ix, oa in enumerate(offs):
                 zz = zc.copy()
-                zz[:, a] += oa * to_z
-                zz[:, b] += ob * to_z
+                zz[:, a] += oa * to_z[a]
+                zz[:, b] += ob * to_z[b]
                 xe = xr + self.dec(zz) - dref
                 if quantity == 'dist':
                     grid[iy, ix] = np.percentile(self.dist_to_data(xe, src_c, src_p), 90)

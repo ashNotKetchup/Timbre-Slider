@@ -14,6 +14,7 @@ DEFAULTS = {
     'training': {'num_epochs': 4000, 'batch_size': 1024, 'learning_rate': 0.01,
                  'alpha_max': 10.0, 'beta_max': 0.1, 'theta_max': 10.0},
     'decoding': {'delta': True, 'smoothing': 1.5},
+    'controls': {'range': 'folder', 'percentiles': [1, 99]},
 }
 
 _current = None

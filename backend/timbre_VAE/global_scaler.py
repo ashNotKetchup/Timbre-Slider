@@ -5,12 +5,15 @@ from scipy.interpolate import PchipInterpolator
 
 class GlobalScaler:
     """
-    Scale arrays based on a stored global min/max to ±output_range.
+    Scale arrays based on a stored min/max to ±output_range.
+
+    fit() stores one min/max over the whole array (every channel shares it). set_range() stores one
+    per channel instead, e.g. the range each control dim covers over the training folder, so every
+    slider spans the values the data actually has.
     """
     def __init__(self):
         self.global_min = None
         self.global_max = None
-        
 
     def fit(self, array: np.ndarray):
         """Store min and max from array for future scaling."""
@@ -20,15 +23,22 @@ class GlobalScaler:
             self.global_max += 1e-8  # avoid divide-by-zero
         return self
 
+    def set_range(self, low, high):
+        """Store a min/max per channel; arrays are (batch, channels, length)."""
+        low = np.asarray(low, dtype=np.float32).reshape(1, -1, 1)
+        high = np.asarray(high, dtype=np.float32).reshape(1, -1, 1)
+        self.global_min = low
+        self.global_max = np.maximum(high, low + 1e-8)  # avoid divide-by-zero
+        return self
+
     def scale(self, array: np.ndarray, output_range: float = 1.0) -> np.ndarray:
         """
         Scale array based on stored min/max to a range of ±output_range 
         eg: a output_range=2 means range expands ±200% of original range.
         """
         if self.global_min is None or self.global_max is None:
-            if self.global_min is None or self.global_max is None:
-                warnings.warn("Scaler not fitted yet; returning input unchanged", UserWarning)
-                return array  
+            warnings.warn("Scaler not fitted yet; returning input unchanged", UserWarning)
+            return array
         mid = (self.global_max + self.global_min) / 2
         spread = (self.global_max - self.global_min) / 2
         scaled = (array - mid) / spread  # normalize to [-1,1]
