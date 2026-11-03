@@ -218,6 +218,42 @@ def vae_loss(recon_x, x, mu, logvar, x_attr, vae, alpha=10.0, beta=0.1, theta=10
     loss = alpha*recon_loss + beta*kl + theta*attr_loss
     return loss, (recon_loss, kl, attr_loss)
 
+def sample_with_attr_noise(vae, mu, logvar, n_attr, floor):
+    """Reparameterise with a minimum noise level on the attribute dims.
+
+    The learned posteriors are very narrow (std ~0.05 against slider travel of several units), so the
+    decoder only ever sees tiny neighbourhoods of each frame's code and most of a slider's range is
+    untrained. Here the attribute dims get noise of at least `floor` times their spread in the batch,
+    so the decoder learns to give sensible output across a wider band around the data.
+    """
+    std = torch.exp(0.5 * logvar)
+    min_std = floor * mu[:, :n_attr].detach().std(0).clamp_min(1e-3)
+    std = torch.cat([torch.maximum(std[:, :n_attr], min_std.expand_as(std[:, :n_attr])), std[:, n_attr:]], dim=1)
+    return vae.decode(mu + torch.randn_like(std) * std)
+
+
+def curvature_loss(vae, mu, n_attr, step=0.5):
+    """How much each attribute dim's decoded path bends, relative to how fast it moves.
+
+    For each frame, take one attribute dim and decode its code moved by -h, 0 and +h (h = `step`
+    spreads of that dim). The second difference over the first difference, squared and averaged, is 0
+    for a straight path at any speed, so it straightens sliders without making them weaker. Only the
+    decoder is trained by this term.
+    """
+    mu = mu.detach()
+    B = mu.shape[0]
+    rows = torch.arange(B, device=mu.device)
+    k = torch.randint(0, n_attr, (B,), device=mu.device)
+    h = step * mu[:, :n_attr].std(0).clamp_min(1e-3)[k]
+    up, down = mu.clone(), mu.clone()
+    up[rows, k] += h
+    down[rows, k] -= h
+    a, b, c = vae.decode(up), vae.decode(mu), vae.decode(down)
+    second = (a - 2 * b + c).pow(2).sum(1)
+    first = ((a - c) / 2).pow(2).sum(1)
+    return second.mean() / first.mean().clamp_min(1e-8)
+
+
 def _available_devices():
     devices = ['cpu']
     if torch.backends.mps.is_available():
@@ -265,13 +301,19 @@ def _fastest_training_device(vae, latent_data, metadata_data, batch_size, steps=
     return best
 
 
-def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=256, learning_rate=1e-2, plot_loss=False, alpha_max=10.0, beta_max=0.1, theta_max=10.0, device=None):
+def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=256, learning_rate=1e-2, plot_loss=False, alpha_max=10.0, beta_max=0.1, theta_max=10.0, device=None,
+              attr_noise=0.0, curvature_weight=0.0, curvature_step=0.5):
     # device: where to train (auto | cpu | mps | cuda). None uses devices.training in
     # backend/settings.yaml. auto times a few batches on each available device and uses the
     # fastest. The trained VAE is moved back to the CPU, where Model runs it.
+    # attr_noise: minimum sampling noise on the attribute dims, in spreads (see sample_with_attr_noise).
+    # curvature_weight: penalty on sliders' decoded paths bending (see curvature_loss); ramps in with
+    # the attribute loss. 0 turns either off.
     metadata_data = torch.tensor(
         np.concatenate(metadata_vectors, axis=0), dtype=torch.float32
     )
+    n_attr = metadata_data.shape[1]
+    curvature_loss_history = []
     device = device or setting('devices', 'training')
     if str(device).strip().lower() == 'auto':
         device = _fastest_training_device(vae, latent_data, metadata_data, batch_size)
@@ -305,6 +347,7 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
         recon_epoch = 0
         kl_epoch = 0
         attr_epoch = 0
+        curvature_epoch = 0
         n_batches = 0
 
 
@@ -346,7 +389,13 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
             x_attr = metadata_data[idx]
             optimizer.zero_grad()
             recon, mu, logvar = vae(batch)
+            if attr_noise > 0:
+                recon = sample_with_attr_noise(vae, mu, logvar, n_attr, attr_noise)
             loss, (recon_loss, kl, attr_loss) = vae_loss(recon, batch, mu, logvar, x_attr, vae, alpha, beta, theta)
+            if curvature_weight > 0 and theta > 0:
+                c_loss = curvature_loss(vae, mu, n_attr, curvature_step)
+                loss = loss + curvature_weight * (theta / max(theta_max, 1e-12)) * c_loss
+                curvature_epoch += c_loss.detach()
             loss.backward()
             optimizer.step()
             # Summed on the device and read once per epoch, so a GPU isn't stopped after every batch
@@ -362,6 +411,7 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
         recon_loss_history.append(float(recon_epoch) / n_batches)
         kl_loss_history.append(float(kl_epoch) / n_batches)
         attr_loss_history.append(float(attr_epoch) / n_batches)
+        curvature_loss_history.append(float(curvature_epoch) / n_batches)
 
         if plot_loss and (epoch % 5 == 0 or epoch == epochs - 1):
             ax.clear()
@@ -391,5 +441,8 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
 
     loss_lists = [total_loss_history, recon_loss_history, kl_loss_history, attr_loss_history]
     labels = ['Total Loss', 'Recon Loss', 'KL Loss', 'Attr Loss']
+    if curvature_weight > 0:
+        loss_lists.append(curvature_loss_history)
+        labels.append('Curvature Loss')
 
     return vae, loss_lists, labels

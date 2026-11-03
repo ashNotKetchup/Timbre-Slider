@@ -339,7 +339,7 @@ const fmt = v => v == null || !isFinite(v) ? '—' : (Math.abs(v) >= 1000 ? v.to
 const escapeHtml = t => String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 // ---------------------------------------------------------------- polling
-const H = { epoch: [], loss: {total: [], recon: [], kl: [], attr: []}, weights: {alpha: [], beta: [], theta: []} };
+const H = { epoch: [], loss: {total: [], recon: [], kl: [], attr: [], curvature: []}, weights: {alpha: [], beta: [], theta: []} };
 let totalEpochs = 0, lastStage = '', trajBuilt = false, pageRun = null;
 
 async function poll() {
@@ -417,8 +417,9 @@ const SERIES = [
   {key: 'recon', name: 'Recon', color: '--s1'},
   {key: 'kl',    name: 'KL',    color: '--s2'},
   {key: 'attr',  name: 'Attr',  color: '--s3'},
+  {key: 'curvature', name: 'Curvature', color: '--s5'},
 ];
-const visible = {total: true, recon: true, kl: true, attr: true};
+const visible = {total: true, recon: true, kl: true, attr: true, curvature: true};
 let hoverIdx = null, lossGeom = null;
 
 for (const s of SERIES) {

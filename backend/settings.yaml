@@ -17,6 +17,13 @@ training:                  # train_vae() arguments used when the app retrains
   alpha_max: 10.0          # reconstruction weight
   beta_max: 0.1            # KL weight (linear warm-up over the first third)
   theta_max: 10.0          # attribute weight (off for the first quarter, then ramps up)
+  attr_noise: 0.0          # minimum sampling noise on the attribute dims while training, in spreads of
+                           # each dim, so the decoder learns more of each slider's range. 0 = off.
+                           # On the Foley folder 0.1-0.25 made sliders much straighter and closer to
+                           # the folder's sounds but also much weaker; try it with curvature off.
+  curvature_weight: 1.0    # penalty on a slider's decoded path bending (relative to its speed). 0 = off.
+                           # Ramps in with the attribute weight.
+  curvature_step: 0.5      # step used to measure the bend, in spreads
 
 decoding:
   delta: true              # decode edits as a change added to the original latent
