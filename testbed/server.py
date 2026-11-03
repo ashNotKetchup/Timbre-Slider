@@ -59,6 +59,10 @@ def make_server(tb, state, port):
                 if state.analysis is None:
                     return self._json({'error': state.info.get('analysis_error') or 'not ready yet'}, 409)
                 return self._json(state.analysis.dataset())
+            if p == '/api/model':
+                if state.analysis is None:
+                    return self._json({'error': state.info.get('analysis_error') or 'not ready yet'}, 409)
+                return self._json(state.analysis.model())
             if p.startswith('/audio/'):
                 name = Path(p).name  # no directory traversal
                 return self._file(tb.audio_dir / name)

@@ -82,7 +82,19 @@ Once the VAE has trained, the **Dataset** tab reports on the frames the backend 
 - **Where each attribute varies:** the share of its variance inside clips versus between them.
 - **How the attributes move together:** correlation over all frames and over clip averages. Cells beyond the p < 0.05 level for that number of clips are outlined.
 
-The numbers are also saved to `analysis.json` in the run folder.
+## Model tab
+
+The **Model** tab moves each VAE dimension from −2 to +2 times its spread, from 400 frames across the folder, applies the edit by delta decoding as the app does, and follows it into the generative latent. Nothing is decoded to audio: the attributes of the result are re-measured with a ridge regression from latent frame to attribute, fitted on the folder (the Dataset tab shows how far it can be trusted).
+
+- **What each slider does:** change in every attribute over the slider's travel, with gain, selectivity and monotonicity. These are latent traversals as used to evaluate attribute-regularised VAEs (Pati & Lerch; Esling et al.).
+- **Response curves** for each slider.
+- **Path through the generative latent:** speed (magnification along the slider, after Arvanitidis et al.), path length over straight-line distance (curvature, after Shao et al.), end-to-end turn, unevenness of step size (after perceptual path length, Karras et al.), and distance to the nearest real frame at each end (k-NN distance, Sun et al.).
+- **Landscape:** the folder's frames in an attribute plane or latent PCA, with one slider's paths from moments of the sample (after the surface and density maps of Bryan-Kinns et al.).
+- **Disentanglement scores** of the VAE code: SCC, MIG, SAP and DCI.
+
+The tab lists full references. Where a measure is adapted rather than taken as published, it says so.
+
+The numbers behind both tabs are saved to `analysis.json` in the run folder.
 
 ## Each run
 
@@ -90,7 +102,7 @@ Each run creates `testbed/runs/<timestamp>_<name>/` containing:
 
 - `config.yaml`: a copy of the config used
 - `losses.json`: per-epoch losses and loss weights
-- `analysis.json`: the numbers behind the Dataset tab
+- `analysis.json`: the numbers behind the Dataset and Model tabs
 - `vae.pt`: the state dict, class, dimensions and history
 - `audio/`: `original.wav`, `vae_recon.wav`, and `edit_###.wav` with its edited latent JSON and the backend's spectrogram PNGs
 

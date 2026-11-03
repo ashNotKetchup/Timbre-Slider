@@ -10,7 +10,7 @@
     --page: #f9f9f7; --surface: #fcfcfb; --surface-2: #f3f2ee;
     --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
     --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
-    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #8f5bd6; --s5: #c99512; --s6: #d64f8f;
     --good: #0ca30c; --warn: #fab219; --crit: #d03b3b;
     --accent: #2a78d6; --accent-ink: #ffffff;
   }
@@ -20,7 +20,7 @@
       --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232321;
       --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
       --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
-      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --accent: #3987e5;
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #9d6be0; --s5: #d4a32a; --s6: #e0649c; --accent: #3987e5;
     }
   }
   :root[data-theme="dark"] {
@@ -28,7 +28,7 @@
     --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232321;
     --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
     --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
-    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --accent: #3987e5;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #9d6be0; --s5: #d4a32a; --s6: #e0649c; --accent: #3987e5;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--page); color: var(--ink);
@@ -130,6 +130,15 @@
   .split .track { height: 14px; display: flex; border-radius: 4px; overflow: hidden; background: var(--surface-2); }
   .split .track div { height: 100%; }
   .split .v { color: var(--ink-2); font-variant-numeric: tabular-nums; text-align: right; }
+  .curves { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-top: 10px; }
+  .curve { background: var(--surface-2); border-radius: 8px; padding: 6px 8px; }
+  .curve .t { font-size: 12.5px; font-weight: 600; display: flex; justify-content: space-between; gap: 6px; }
+  .curve .t span { font-weight: 400; color: var(--muted); }
+  .curve canvas { width: 100%; height: 120px; display: block; }
+  .mapwrap { position: relative; height: 520px; margin-top: 10px; background: var(--surface-2); border-radius: 8px; }
+  .mapwrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  select { font: inherit; font-size: 13px; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); }
+  .ramp { display: inline-block; width: 120px; height: 8px; border-radius: 4px; vertical-align: middle; margin: 0 6px; }
   .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 5px; }
 </style>
 </head>
@@ -140,6 +149,7 @@
     <nav class="tabs" role="tablist" aria-label="Views">
       <button role="tab" data-tab="edit" aria-selected="true">Edit</button>
       <button role="tab" data-tab="dataset" aria-selected="false">Dataset</button>
+      <button role="tab" data-tab="model" aria-selected="false">Model</button>
     </nav>
     <span class="run" id="runName"></span>
     <span class="spacer"></span>
@@ -229,6 +239,65 @@
           <ol class="refs">
             <li>Eastwood &amp; Williams (2018). A framework for the quantitative evaluation of disentangled representations. ICLR. <a href="https://homepages.inf.ed.ac.uk/ckiw/postscript/iclr_final.pdf" target="_blank" rel="noopener">pdf</a></li>
           </ol>
+        </details>
+      </section>
+    </div>
+  </div>
+  <div class="tab" id="tab-model" hidden>
+    <div class="placeholder" id="mdWait">The model report appears once the VAE has trained.</div>
+    <div class="tab" id="mdBody" hidden>
+      <section class="card">
+        <div class="card-head"><h2>What each slider does</h2><span class="msg">change in each attribute over the slider's full travel, std units</span></div>
+        <div style="overflow-x:auto"><table class="metric" id="mdResponse"></table></div>
+        <p class="note">Each slider is moved from −2 to +2 times its spread (its std over the folder's frames), from 400 frames across the folder, and the edit is applied by delta decoding as in the app. The attributes of the result are re-measured with the folder's latent-to-attribute predictor, which stands in for decoding to audio and running the feature extractor (the Dataset tab shows how far to trust it). Medians over frames. This is the latent traversal used to evaluate attribute-regularised VAEs [2, 9]. <b>Gain</b>: change in the slider's own attribute (for an unregularised dim, the attribute it moves most). <b>Selectivity</b>: that change as a share of the change in all attributes. <b>Monotonic</b>: median rank correlation between slider position and the attribute, per frame (1 = always rises).</p>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>Response curves</h2><span class="msg" id="mdCurvesKey"></span></div>
+        <div class="curves" id="mdCurves"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>Path through the generative latent</h2><span class="msg">the slider's edit followed into the 64-dim latent the generative model decodes</span></div>
+        <div style="overflow-x:auto"><table class="metric" id="mdPaths"></table></div>
+        <p class="note"><b>Speed</b>: latent distance moved per unit of slider (the decoder's magnification along that direction [5]). <b>Path ÷ straight line</b>: length of the decoded path over the distance between its ends; 1 means the slider moves in a straight line, higher means it curves [6]. <b>End-to-end turn</b>: cosine between the path's first and last steps (1 = same direction, 0 = a right angle). <b>Unevenness</b>: variation of step size along the path (0 = the sound changes at a steady rate), in the spirit of perceptual path length [7]. <b>Distance to seen sounds</b>: distance to the nearest real frame in the folder, ignoring the frame's own moment, in units of the typical gap between real frames [8]; above about 1.5 the slider is taking the sound somewhere the folder has nothing like.</p>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>Landscape</h2><span class="msg">the folder's frames in 2D, with one slider's paths from moments of the sample</span></div>
+        <div class="toolbar">
+          <label class="check">slider <select id="mapSlider"></select></label>
+          <label class="check">view <select id="mapView"></select></label>
+          <label class="check">colour by <select id="mapColour"></select></label>
+          <span class="msg" id="mapKey"></span>
+        </div>
+        <div class="mapwrap"><canvas id="mapCanvas" role="img" aria-label="2D map of the folder's latent frames and slider paths"></canvas></div>
+        <p class="note">Dots are frames of the folder, coloured by an attribute's measured value. The grey line is the sample over time (smoothed). Each arrow is the selected slider moved from −2 to +2 spreads from one moment of the sample, with a dot at the unedited point. <b>Attribute views</b> place frames and paths alike by the attributes the predictor reads from the latent, so an arrow that runs along the x axis moves that attribute and nothing else. <b>Latent PCA</b> places them by the two main directions of the generative latent; it keeps only the variance in the axis labels, so treat lengths as rough. Arrows that leave the cloud are edits the folder has no examples of. These maps follow the surface and density plots used to explain generative music latents [9, 10].</p>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>Disentanglement scores</h2><span class="msg">VAE code against the attributes, all frames</span></div>
+        <div style="overflow-x:auto"><table class="metric" id="mdDis"></table></div>
+        <p class="note"><b>SCC</b>: best rank correlation between the attribute and any single dim, and which dim [2]. <b>MIG</b>: gap in mutual information between the two dims that share most with the attribute, over its entropy [3]. <b>SAP</b>: gap in R² between the two dims that predict it best on their own [4]. <b>Completeness</b> (one dim captures the attribute) and <b>disentanglement</b> (each dim captures one attribute) from DCI, with linear-regression importances; <b>informativeness</b> is R² from the whole code on held-out clips [1]. The VAE was trained on these labels, so these describe the fit, not generalisation.</p>
+      </section>
+
+      <section class="card">
+        <details><summary>Method and references</summary>
+          <p class="note">Traversals, paths and the landscape use the trained VAE on the CPU and the folder's own frames; nothing here decodes audio. Re-measuring attributes uses a ridge regression from a latent frame to the attributes, fitted on all the folder's frames.</p>
+          <ol class="refs">
+            <li>Eastwood &amp; Williams (2018). A framework for the quantitative evaluation of disentangled representations. ICLR. <a href="https://homepages.inf.ed.ac.uk/ckiw/postscript/iclr_final.pdf" target="_blank" rel="noopener">pdf</a></li>
+            <li>Pati &amp; Lerch (2021). Attribute-based regularization of latent spaces for variational auto-encoders. Neural Computing and Applications. <a href="https://arxiv.org/abs/2004.05485" target="_blank" rel="noopener">arXiv</a></li>
+            <li>Chen, Li, Grosse &amp; Duvenaud (2018). Isolating sources of disentanglement in variational autoencoders. NeurIPS.</li>
+            <li>Kumar, Sattigeri &amp; Balakrishnan (2018). Variational inference of disentangled latent concepts from unlabeled observations. ICLR.</li>
+            <li>Arvanitidis, Hansen &amp; Hauberg (2018). Latent space oddity: on the curvature of deep generative models. ICLR. <a href="https://arxiv.org/abs/1710.11379" target="_blank" rel="noopener">arXiv</a></li>
+            <li>Shao, Kumar &amp; Fletcher (2018). The Riemannian geometry of deep generative models. CVPR Workshops. <a href="https://openaccess.thecvf.com/content_cvpr_2018_workshops/w10/html/Shao_The_Riemannian_Geometry_CVPR_2018_paper.html" target="_blank" rel="noopener">CVF</a></li>
+            <li>Karras, Laine &amp; Aila (2019). A style-based generator architecture for generative adversarial networks. CVPR.</li>
+            <li>Sun, Ming, Zhu &amp; Li (2022). Out-of-distribution detection with deep nearest neighbors. ICML. <a href="https://proceedings.mlr.press/v162/sun22d.html" target="_blank" rel="noopener">PMLR</a></li>
+            <li>Esling, Chemla-Romeu-Santos &amp; Bitton (2018). Generative timbre spaces: regularizing variational auto-encoders with perceptual metrics. DAFx. <a href="https://arxiv.org/abs/1805.08501" target="_blank" rel="noopener">arXiv</a></li>
+            <li>Bryan-Kinns, Banar, Ford, Reed, Zhang, Colton &amp; Armitage (2021). Exploring XAI for the arts: explaining latent space in generative music. NeurIPS Workshop on eXplainable AI approaches for debugging and diagnosis. <a href="https://arxiv.org/abs/2308.05496" target="_blank" rel="noopener">arXiv</a></li>
+            <li>Shen, Gu, Tang &amp; Zhou (2020). Interpreting the latent space of GANs for semantic face editing. CVPR. <a href="https://arxiv.org/abs/1907.10786" target="_blank" rel="noopener">arXiv</a></li>
+          </ol>
+          <p class="note">Adapted, not identical: [5] and [6] measure curvature with the decoder's Jacobian and geodesics, and [7] measures path length in a perceptual embedding of images. Here the same ideas are applied to the slider's straight path in the VAE code, followed into the generative latent, which stands in for a perceptual space.</p>
         </details>
       </section>
     </div>
@@ -534,6 +603,7 @@ function showTab(name) {
   for (const t of document.querySelectorAll('main > .tab')) t.hidden = t.id !== 'tab-' + name;
   if (location.hash.slice(1) !== name) history.replaceState(null, '', '#' + name);
   if (name === 'dataset') loadDataset();
+  if (name === 'model') loadModel();
   window.dispatchEvent(new Event('resize'));
 }
 for (const b of tabButtons) b.onclick = () => showTab(b.dataset.tab);
@@ -582,6 +652,111 @@ function renderDataset(d) {
   $('#dsCorrNote').innerHTML = `Across all frames the PCA attributes are uncorrelated by construction. The clip averages show whether the folder's sounds tangle them. A strong value means sounds high in one attribute also tend to be high (or low) in the other, and the VAE learns that pairing.` +
     (d.r_crit ? ` Outlined cells are beyond ±${num(d.r_crit)}, the level a correlation of ${d.n_clips} clip averages needs before it is unlikely to be chance (p &lt; 0.05).` : '');
 }
+
+// ---------------------------------------------------------------- Model tab
+let MD = null;
+const PALETTE = ['--s1', '--s2', '--s3', '--s4', '--s5', '--s6'];
+const attrColour = j => css(PALETTE[j % PALETTE.length]);
+async function loadModel() {
+  if (MD) return;
+  const r = await fetch('/api/model');
+  if (!r.ok) { const j = await r.json().catch(() => ({})); $('#mdWait').textContent = j.error && j.error !== 'not ready yet' ? 'Model report failed: ' + j.error : 'The model report appears once the VAE has trained.'; setTimeout(() => { if (!$('#tab-model').hidden) loadModel(); }, 2000); return; }
+  MD = await r.json(); renderModel(MD);
+}
+function renderModel(m) {
+  $('#mdWait').hidden = true; $('#mdBody').hidden = false;
+  const A = m.attr_labels, S = m.slider_labels, J = m.n_attr;
+  const tgtName = (k, sl) => k < J ? '' : ` <span class="msg">(→ ${escapeHtml(A[sl.target])})</span>`;
+  $('#mdResponse').innerHTML = `<thead><tr><th></th><th class="grp" colspan="${J}">change in attribute</th><th class="grp" colspan="3"></th></tr>
+    <tr><th>slider</th>${A.map(a => `<th class="num">${escapeHtml(a)}</th>`).join('')}<th class="num">gain</th><th class="num">selectivity</th><th class="num">monotonic</th></tr></thead><tbody>` +
+    m.sliders.map((sl, k) => `<tr><td>${escapeHtml(S[k])}${k < J ? '' : ' <span class="msg">free</span>'}</td>${sl.response.map((v, j) =>
+      `<td class="num" style="${dtint(v)}${j === sl.target ? ';font-weight:700' : ''}">${num(v)}</td>`).join('')}
+      <td class="num">${num(sl.gain)}${tgtName(k, sl)}</td>${cell(sl.selectivity)}${cell(sl.monotonic)}</tr>`).join('') + '</tbody>';
+  $('#mdCurvesKey').innerHTML = A.map((a, j) => `<span class="swatch" style="background:${attrColour(j)}"></span>${escapeHtml(a)}`).join('&nbsp;&nbsp; ');
+  $('#mdCurves').innerHTML = m.sliders.map((sl, k) => `<div class="curve"><div class="t">${escapeHtml(S[k])} <span>±${num(sl.range, 1)} in the code</span></div><canvas data-k="${k}" role="img" aria-label="Attribute change as ${escapeHtml(S[k])} moves"></canvas></div>`).join('');
+  let ymax = 0.2; for (const sl of m.sliders) for (const row of sl.curves) for (const v of row) ymax = Math.max(ymax, Math.abs(v));
+  m._ymax = ymax;
+  drawCurves();
+  $('#mdPaths').innerHTML = `<thead><tr><th></th><th class="num">speed</th><th class="num">path length</th><th class="num">path ÷ straight line</th><th class="num">end-to-end turn</th><th class="num">unevenness</th><th class="grp" colspan="3">distance to seen sounds</th></tr>
+    <tr><th>slider</th><th></th><th></th><th></th><th></th><th></th><th class="num">at −2</th><th class="num">unedited</th><th class="num">at +2</th></tr></thead><tbody>` +
+    m.sliders.map((sl, k) => `<tr><td>${escapeHtml(S[k])}</td><td class="num">${num(sl.speed)}</td><td class="num">${num(sl.length, 1)}</td>
+      <td class="num">${num(sl.tortuosity)}</td><td class="num">${num(sl.bend)}</td><td class="num">${num(sl.unevenness)}</td>
+      ${sl.dist.map(v => `<td class="num" style="${v > 1 ? `background: color-mix(in srgb, var(--warn) ${Math.round(Math.min(1, (v - 1) / 1) * 60)}%, transparent)` : ''}">${num(v)}</td>`).join('')}</tr>`).join('') + '</tbody>';
+  const D = m.disentanglement;
+  $('#mdDis').innerHTML = `<thead><tr><th>attribute</th><th class="num">SCC</th><th class="num">best dim</th><th class="num">MIG</th><th class="num">SAP</th><th class="num">completeness</th><th class="num">informativeness</th></tr></thead><tbody>` +
+    D.per_attr.map((p, j) => `<tr><td>${escapeHtml(A[j])}</td>${cell(p.scc)}<td class="num">${escapeHtml(S[p.scc_dim])}</td>${cell(p.mig)}${cell(p.sap)}${cell(p.completeness)}${cell(p.informativeness)}</tr>`).join('') +
+    `<tr><td><b>overall</b></td>${cell(D.overall.scc)}<td></td>${cell(D.overall.mig)}${cell(D.overall.sap)}${cell(D.overall.completeness)}${cell(D.overall.informativeness)}</tr>
+     <tr><td colspan="7" class="msg">DCI disentanglement (all dims, weighted by importance): <b>${num(D.overall.disentanglement)}</b></td></tr></tbody>`;
+  $('#mapSlider').innerHTML = S.map((l, k) => `<option value="${k}">${escapeHtml(l)}</option>`).join('');
+  $('#mapColour').innerHTML = A.map((l, j) => `<option value="${j}">${escapeHtml(l)}</option>`).join('');
+  const views = []; for (let a = 0; a < J; a++) for (let b = a + 1; b < J; b++) views.push([`attr:${a}:${b}`, `${A[a]} × ${A[b]}`]);
+  views.push(['pca', 'latent PCA']);
+  $('#mapView').innerHTML = views.map(([v, l]) => `<option value="${v}">${escapeHtml(l)}</option>`).join('');
+  $('#mapSlider').onchange = $('#mapColour').onchange = $('#mapView').onchange = drawMap;
+  drawMap();
+}
+function drawCurves() {
+  if (!MD) return;
+  for (const c of document.querySelectorAll('#mdCurves canvas')) {
+    const sl = MD.sliders[+c.dataset.k], [ctx, W, Hh] = sizeCanvas(c), ymax = MD._ymax;
+    ctx.clearRect(0, 0, W, Hh);
+    const pad = {l: 30, r: 6, t: 6, b: 16};
+    const x = t => pad.l + (t + 1) / 2 * (W - pad.l - pad.r), y = v => pad.t + (1 - (v + ymax) / (2 * ymax)) * (Hh - pad.t - pad.b);
+    ctx.font = '10px system-ui, sans-serif'; ctx.fillStyle = css('--muted'); ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (const v of [-ymax, 0, ymax]) { ctx.strokeStyle = css('--grid'); ctx.beginPath(); ctx.moveTo(pad.l, Math.round(y(v)) + .5); ctx.lineTo(W - pad.r, Math.round(y(v)) + .5); ctx.stroke(); ctx.fillText(v.toFixed(1), pad.l - 4, y(v)); }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (const t of [-1, 0, 1]) ctx.fillText(t === 0 ? '0' : (t < 0 ? '−2' : '+2'), x(t), Hh - pad.b + 3);
+    const T = sl.ts.length;
+    for (let j = 0; j < MD.n_attr; j++) {
+      ctx.strokeStyle = attrColour(j); ctx.lineWidth = j === sl.target ? 2.4 : 1.4; ctx.globalAlpha = j === sl.target ? 1 : .75;
+      ctx.beginPath(); for (let i = 0; i < T; i++) { const px = x(sl.ts[i]), py = y(sl.curves[i][j]); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); } ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+// sequential colour for a value in [0, 1], light to dark accent
+const seq = v => `color-mix(in srgb, var(--accent) ${Math.round(15 + 85 * Math.max(0, Math.min(1, v)))}%, var(--surface))`;
+function drawMap() {
+  if (!MD) return;
+  const L = MD.landscape, k = +$('#mapSlider').value || 0, j = +$('#mapColour').value || 0;
+  const view = $('#mapView').value || 'pca', isPca = view === 'pca';
+  const [, va, vb] = isPca ? [] : view.split(':').map(Number);
+  const pick = arr => isPca ? arr : arr.map(r => [r[va], r[vb]]);
+  const P = pick(isPca ? L.pca : L.pred), track = pick(isPca ? L.sample_pca : L.sample_pred);
+  const paths = (isPca ? L.paths_pca[k] : L.paths_attr[k]).map(pick);
+  const c = $('#mapCanvas'), [ctx, W, Hh] = sizeCanvas(c); ctx.clearRect(0, 0, W, Hh);
+  const all = [...P, ...track, ...paths.flat()];
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const [a, b] of all) { x0 = Math.min(x0, a); x1 = Math.max(x1, a); y0 = Math.min(y0, b); y1 = Math.max(y1, b); }
+  const pad = 24, sc = Math.min((W - 2 * pad) / (x1 - x0 || 1), (Hh - 2 * pad - 16) / (y1 - y0 || 1));
+  const ox = (W - sc * (x1 - x0)) / 2, oy = (Hh - 16 - sc * (y1 - y0)) / 2;
+  const X = a => ox + (a - x0) * sc, Y = b => Hh - 16 - (oy + (b - y0) * sc);
+  const vals = L.attrs.map(a => a[j]); const sorted = [...vals].sort((a, b) => a - b);
+  const lo = sorted[Math.floor(.02 * sorted.length)], hi = sorted[Math.floor(.98 * sorted.length)];
+  // colour ramp: resolve once to rgb strings via a probe element
+  const probe = document.createElement('span'); document.body.appendChild(probe);
+  const ramp = []; for (let i = 0; i <= 20; i++) { probe.style.color = seq(i / 20); ramp.push(getComputedStyle(probe).color); } probe.remove();
+  ctx.globalAlpha = .75;
+  P.forEach((p, i) => { const t = (vals[i] - lo) / (hi - lo || 1); ctx.fillStyle = ramp[Math.round(20 * Math.max(0, Math.min(1, t)))]; ctx.fillRect(X(p[0]) - 1.5, Y(p[1]) - 1.5, 3, 3); });
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = css('--ink-2'); ctx.lineWidth = 1; ctx.globalAlpha = .55; ctx.beginPath();
+  track.forEach(([a, b], i) => i ? ctx.lineTo(X(a), Y(b)) : ctx.moveTo(X(a), Y(b))); ctx.stroke(); ctx.globalAlpha = 1;
+  const col = css('--crit');
+  for (const path of paths) {
+    ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath();
+    path.forEach(([a, b], i) => i ? ctx.lineTo(X(a), Y(b)) : ctx.moveTo(X(a), Y(b))); ctx.stroke();
+    const n = path.length, [ax, ay] = path[n - 2], [bx, by] = path[n - 1];
+    const ang = Math.atan2(Y(by) - Y(ay), X(bx) - X(ax));
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(X(bx), Y(by));
+    ctx.lineTo(X(bx) - 8 * Math.cos(ang - .45), Y(by) - 8 * Math.sin(ang - .45)); ctx.lineTo(X(bx) - 8 * Math.cos(ang + .45), Y(by) - 8 * Math.sin(ang + .45)); ctx.fill();
+    const [mx, my] = path[(n - 1) / 2 | 0]; ctx.fillStyle = css('--ink'); ctx.beginPath(); ctx.arc(X(mx), Y(my), 3, 0, 7); ctx.fill();
+  }
+  ctx.fillStyle = css('--muted'); ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+  ctx.fillText(isPca ? `PC1 (${(100 * L.explained[0]).toFixed(0)}% of variance) →    PC2 (${(100 * L.explained[1]).toFixed(0)}%) ↑`
+    : `${MD.attr_labels[va]} as read from the latent →    ${MD.attr_labels[vb]} ↑`, 8, Hh - 2);
+  $('#mapKey').innerHTML = `${escapeHtml(MD.attr_labels[j])}: low <span class="ramp" style="background: linear-gradient(90deg, ${ramp[0]}, ${ramp[20]})"></span> high · <span class="swatch" style="background:${col}"></span>${escapeHtml(MD.slider_labels[k])} −2 → +2`;
+}
+new ResizeObserver(() => { drawCurves(); drawMap(); }).observe($('#tab-model'));
 
 showTab(location.hash.slice(1) || 'edit');
 poll();

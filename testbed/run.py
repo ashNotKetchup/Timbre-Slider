@@ -103,7 +103,7 @@ class State:
         self.sample = {}
         self.messages = []   # recent request/response pairs, for the UI
         self.decode_count = 0
-        self.analysis = None  # testbed.analysis.Analysis once the VAE has trained (Dataset tab)
+        self.analysis = None  # testbed.analysis.Analysis once the VAE has trained (Dataset and Model tabs)
 
     def set(self, stage, message=''):
         self.stage, self.message = stage, message
@@ -169,7 +169,7 @@ class TrainingHooks:
         (rs.train_vae, rs.VAE, vae_train.vae_loss, vae_train.increment_progress_bar,
          rs.prepare_data) = self.orig
 
-    # rs.prepare_data(sound_data, ...) builds the training set: keep it for the Dataset tab
+    # rs.prepare_data(sound_data, ...) builds the training set: keep it for the Dataset and Model tabs
     def prepare(self, sound_data, *args, **kw):
         out = self.orig[4](sound_data, *args, **kw)
         self.tb.captured = (sound_data, out)
@@ -310,16 +310,16 @@ class Testbed:
             print(self.state.error)
 
     def _analyse(self):
-        """Dataset tab: computed once, from the frames the VAE was trained on."""
+        """Dataset and Model tabs: computed once, from the frames the VAE was trained on."""
         if self.captured is None or rs.gen_model.control_stats is None:
             return
-        self.state.set('analysing', 'dataset report')
+        self.state.set('analysing', 'dataset and model reports')
         try:
             t0 = time.time()
             data = FolderData(*self.captured)
             mean, std = rs.gen_model.control_stats
             an = Analysis(data, rs.gen_model.control_model, mean, std, sample_name=self.sample_path.name)
-            report = {'dataset': an.dataset()}
+            report = {'dataset': an.dataset(), 'model': an.model()}
             with open(self.run_dir / 'analysis.json', 'w') as f:
                 json.dump(report, f)
             self.state.analysis = an
