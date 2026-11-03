@@ -17,6 +17,12 @@ training:                  # train_vae() arguments used when the app retrains
   alpha_max: 10.0          # reconstruction weight
   beta_max: 0.1            # KL weight (linear warm-up over the first third)
   theta_max: 10.0          # attribute weight (off for the first quarter, then ramps up)
+  control_weight: 1.0      # weak supervision of what each slider does to the decoded latent, read by a
+                           # linear latent-to-attribute predictor fitted on the folder. 0 = off.
+                           # Ramps in with the attribute weight.
+  control_shift: 1.0       # largest slider move tried, in spreads of that dim
+  control_leak: 0.5        # weight of "the other attributes shouldn't move"
+  control_min_r2: 0.1      # attributes the predictor reads worse than this (R² on the folder) are left out
 
 decoding:
   delta: true              # decode edits as a change added to the original latent

@@ -51,7 +51,7 @@ from backend.timbre_VAE.plotting import save_spectrogram  # noqa: E402
 from testbed.analysis import Analysis, FolderData  # noqa: E402
 
 AUDIO_EXTS = ('.wav', '.aif', '.mp3', '.ogg')  # same filter as backend/run_server.py
-LOSS_KEYS = ('total', 'recon', 'kl', 'attr')    # order of train_vae's loss_lists
+LOSS_KEYS = ('total', 'recon', 'kl', 'attr', 'control')    # order of train_vae's loss_lists
 
 DEFAULTS = {
     'name': 'run', 'folder': None, 'sample': None, 'feature_type': 'pca',
@@ -157,17 +157,25 @@ class TrainingHooks:
         self.cur_epoch = 0
 
     def __enter__(self):
-        self.orig = (rs.train_vae, rs.VAE, vae_train.vae_loss, vae_train.increment_progress_bar, rs.prepare_data)
+        self.orig = (rs.train_vae, rs.VAE, vae_train.vae_loss, vae_train.increment_progress_bar, rs.prepare_data,
+                     vae_train.control_loss)
         rs.train_vae = self.train
         rs.VAE = self.make_vae
         vae_train.vae_loss = self.loss
         vae_train.increment_progress_bar = self.progress
         rs.prepare_data = self.prepare
+        vae_train.control_loss = self.control
         return self
 
     def __exit__(self, *exc):
         (rs.train_vae, rs.VAE, vae_train.vae_loss, vae_train.increment_progress_bar,
-         rs.prepare_data) = self.orig
+         rs.prepare_data, vae_train.control_loss) = self.orig
+
+    # called by train_vae for every batch when training.control_weight > 0
+    def control(self, *args, **kw):
+        res = self.orig[5](*args, **kw)
+        self.sums['control'] += res.item()
+        return res
 
     # rs.prepare_data(sound_data, ...) builds the training set: keep it for the Dataset and Model tabs
     def prepare(self, sound_data, *args, **kw):
@@ -202,7 +210,7 @@ class TrainingHooks:
             self._close_epoch()
             self.state.message = f'stopped at epoch {self.cur_epoch - 1}'
             loss_lists = [h['loss'][k] for k in LOSS_KEYS]
-            labels = ['Total Loss', 'Recon Loss', 'KL Loss', 'Attr Loss']
+            labels = ['Total Loss', 'Recon Loss', 'KL Loss', 'Attr Loss', 'Control Loss']
         self.tb.save_run(vae, self)
         return vae, loss_lists, labels
 

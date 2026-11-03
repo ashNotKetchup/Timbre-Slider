@@ -12,7 +12,8 @@ import sys
 DEFAULTS = {
     'devices': {'generative_model': 'auto', 'training': 'auto', 'feature_workers': 'auto'},
     'training': {'num_epochs': 4000, 'batch_size': 1024, 'learning_rate': 0.01,
-                 'alpha_max': 10.0, 'beta_max': 0.1, 'theta_max': 10.0},
+                 'alpha_max': 10.0, 'beta_max': 0.1, 'theta_max': 10.0,
+                 'control_weight': 1.0, 'control_shift': 1.0, 'control_leak': 0.5, 'control_min_r2': 0.1},
     'decoding': {'delta': True, 'smoothing': 1.5},
 }
 

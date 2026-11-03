@@ -218,6 +218,49 @@ def vae_loss(recon_x, x, mu, logvar, x_attr, vae, alpha=10.0, beta=0.1, theta=10
     loss = alpha*recon_loss + beta*kl + theta*attr_loss
     return loss, (recon_loss, kl, attr_loss)
 
+def fit_attribute_predictor(latent_data, metadata_data, ridge=1.0):
+    """Ridge regression from a (standardised) latent frame to the (standardised) attributes.
+
+    Returns the weights (latent_dim, n_attr) and each attribute's R² on the training frames. Used as a
+    frozen stand-in for "decode to audio and re-measure the attribute" in control_loss.
+    """
+    X = latent_data.double()
+    A = metadata_data.double()
+    eye = torch.eye(X.shape[1], dtype=X.dtype, device=X.device)
+    W = torch.linalg.solve(X.T @ X + ridge * eye, X.T @ A)
+    resid = A - X @ W
+    r2 = 1 - resid.pow(2).sum(0) / (A - A.mean(0)).pow(2).sum(0).clamp_min(1e-12)
+    return W.float(), r2.float()
+
+
+def control_loss(vae, mu, W, weights, n_attr, shift=1.0, leak=0.5):
+    """Weak supervision of what a slider does, through the frozen attribute predictor W.
+
+    For each frame, shift one attribute dim of its code by a random amount (up to `shift` times that
+    dim's spread in the batch) and decode, as delta decoding does: change = decode(z + d) - decode(z).
+    The predictor reads the attributes of that change. The slider's own attribute should move by the
+    shift measured in spreads (so one spread of the dim is about one std of the attribute), and the
+    other attributes should not move (weighted by `leak`). Attributes the predictor can't read
+    (low R²) count for less. Only the decoder is trained by this term.
+    """
+    mu = mu.detach()
+    B = mu.shape[0]
+    rows = torch.arange(B, device=mu.device)
+    k = torch.randint(0, n_attr, (B,), device=mu.device)
+    spread = mu[:, :n_attr].std(0).clamp_min(1e-3)[k]
+    steps = (torch.rand(B, device=mu.device) * 2 - 1) * shift          # in spreads
+    z = mu.clone()
+    z[rows, k] += steps * spread
+    change = vae.decode(z) - vae.decode(mu)
+    pred = change @ W                                                   # (B, n_attr)
+    w = weights[k]
+    on = (w * (pred[rows, k] - steps) ** 2).mean()
+    off_mask = torch.ones_like(pred)
+    off_mask[rows, k] = 0
+    off = ((pred ** 2) * off_mask * weights[None, :]).sum() / (off_mask * weights[None, :]).sum().clamp_min(1e-6)
+    return on + leak * off
+
+
 def _available_devices():
     devices = ['cpu']
     if torch.backends.mps.is_available():
@@ -265,13 +308,26 @@ def _fastest_training_device(vae, latent_data, metadata_data, batch_size, steps=
     return best
 
 
-def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=256, learning_rate=1e-2, plot_loss=False, alpha_max=10.0, beta_max=0.1, theta_max=10.0, device=None):
+def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=256, learning_rate=1e-2, plot_loss=False, alpha_max=10.0, beta_max=0.1, theta_max=10.0, device=None,
+              control_weight=0.0, control_shift=1.0, control_leak=0.5, control_min_r2=0.1):
     # device: where to train (auto | cpu | mps | cuda). None uses devices.training in
     # backend/settings.yaml. auto times a few batches on each available device and uses the
     # fastest. The trained VAE is moved back to the CPU, where Model runs it.
+    # control_*: weak supervision of what each slider does to the decoded latent (see control_loss);
+    # control_weight 0 turns it off. It ramps in with the attribute loss.
     metadata_data = torch.tensor(
         np.concatenate(metadata_vectors, axis=0), dtype=torch.float32
     )
+    n_attr = metadata_data.shape[1]
+    if control_weight > 0:
+        W_pred, r2_pred = fit_attribute_predictor(latent_data, metadata_data)
+        # attributes the predictor can't read get no weight; the rest count by how well it reads them
+        pred_weights = torch.where(r2_pred >= control_min_r2, r2_pred.clamp(0, 1), torch.zeros_like(r2_pred))
+        print("[train] control loss: predictor R² " + ", ".join(f"{v:.2f}" for v in r2_pred.tolist())
+              + f" -> weights " + ", ".join(f"{v:.2f}" for v in pred_weights.tolist()))
+        if float(pred_weights.sum()) == 0:
+            print("[train] control loss off: the predictor can't read any attribute")
+            control_weight = 0.0
     device = device or setting('devices', 'training')
     if str(device).strip().lower() == 'auto':
         device = _fastest_training_device(vae, latent_data, metadata_data, batch_size)
@@ -279,6 +335,9 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
     vae.to(device)
     latent_data = latent_data.to(device)
     metadata_data = metadata_data.to(device)
+    if control_weight > 0:
+        W_pred, pred_weights = W_pred.to(device), pred_weights.to(device)
+    control_loss_history = []
     optimizer = optim.Adam(vae.parameters(), lr=learning_rate)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
     loss_history = []
@@ -305,6 +364,7 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
         recon_epoch = 0
         kl_epoch = 0
         attr_epoch = 0
+        control_epoch = 0
         n_batches = 0
 
 
@@ -347,6 +407,10 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
             optimizer.zero_grad()
             recon, mu, logvar = vae(batch)
             loss, (recon_loss, kl, attr_loss) = vae_loss(recon, batch, mu, logvar, x_attr, vae, alpha, beta, theta)
+            if control_weight > 0 and theta > 0:
+                c_loss = control_loss(vae, mu, W_pred, pred_weights, n_attr, control_shift, control_leak)
+                loss = loss + control_weight * (theta / max(theta_max, 1e-12)) * c_loss
+                control_epoch += c_loss.detach()
             loss.backward()
             optimizer.step()
             # Summed on the device and read once per epoch, so a GPU isn't stopped after every batch
@@ -362,6 +426,7 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
         recon_loss_history.append(float(recon_epoch) / n_batches)
         kl_loss_history.append(float(kl_epoch) / n_batches)
         attr_loss_history.append(float(attr_epoch) / n_batches)
+        control_loss_history.append(float(control_epoch) / n_batches)
 
         if plot_loss and (epoch % 5 == 0 or epoch == epochs - 1):
             ax.clear()
@@ -391,5 +456,8 @@ def train_vae(vae, latent_data, metadata_vectors, num_epochs=1000, batch_size=25
 
     loss_lists = [total_loss_history, recon_loss_history, kl_loss_history, attr_loss_history]
     labels = ['Total Loss', 'Recon Loss', 'KL Loss', 'Attr Loss']
+    if control_weight > 0:
+        loss_lists.append(control_loss_history)
+        labels.append('Control Loss')
 
     return vae, loss_lists, labels
